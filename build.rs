@@ -8,8 +8,12 @@ fn main() {
     "cargo:rustc-link-search={}",
     env::var("FFMPEG_LIB").expect("FFMPEG_LIB env missing")
   );
+
+  println!("cargo:rustc-link-lib=avcodec");
   println!("cargo:rustc-link-lib=avformat");
   println!("cargo:rustc-link-lib=avutil");
+  println!("cargo:rustc-link-lib=swscale");
+
   println!("cargo:rerun-if-changed=wrapper.h");
   println!("cargo:rerun-if-changed=.env");
 
@@ -25,10 +29,12 @@ fn main() {
     .generate()
     .expect("Unable to generate bindings");
 
-  let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-  bindings
-    .write_to_file(out_path.join("bindings.rs"))
-    .expect("Couldn't write bindings!");
+  let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("ffmpeg.rs");
+  let bindings = bindings.to_string();
+
+  if let Err(err) = fs::write(out_path, bindings) {
+    println!("Error writing to file: {}", err);
+  }
 }
 
 fn load_env() {

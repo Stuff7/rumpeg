@@ -1,61 +1,56 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-extern crate libc;
+mod ffmpeg {
+  #![allow(non_upper_case_globals)]
+  #![allow(non_camel_case_types)]
+  #![allow(non_snake_case)]
+  #![allow(dead_code)]
+  include!(concat!(env!("OUT_DIR"), "/ffmpeg.rs"));
+}
 
-use libc::c_char;
+mod rumpeg;
+mod video;
+
 use std::env;
-use std::ffi::CString;
-use std::ptr;
-
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+use video::Video;
 
 fn main() {
   let args: Vec<String> = env::args().collect();
+  let filepath = args.get(1).unwrap_or_exit("Missing file path").as_str();
+  let mut video = Video::open(filepath).unwrap_or_exit("Failed to open video");
+  println!("VIDEO {:#?}", video);
+  for i in 0..9 {
+    video
+      .get_thumbnail(i * 5, format!("temp/image-{i}.webp").as_str())
+      .unwrap_or_exit("Failed to get thumbnail");
+  }
+}
 
-  let filename = CString::new(if args.len() > 1 {
-    args[1].as_str()
-  } else {
-    println!("Missing file path");
-    return;
-  })
-  .expect("CString creation failed");
+trait GracefulExit<T> {
+  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T;
+}
 
-  unsafe {
-    let mut format_context = avformat_alloc_context();
-    if format_context.is_null() {
-      eprintln!("avformat_alloc_context failed");
-      return;
+impl<T, E> GracefulExit<T> for Result<T, E>
+where
+  E: std::fmt::Display,
+{
+  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T {
+    match self {
+      Ok(t) => t,
+      Err(e) => {
+        eprintln!("{msg}: {e}");
+        std::process::exit(0)
+      }
     }
+  }
+}
 
-    let result = avformat_open_input(
-      &mut format_context,
-      filename.as_ptr(),
-      ptr::null_mut(),
-      ptr::null_mut(),
-    );
-
-    if result < 0 {
-      let mut error_buffer: [c_char; 256] = [0; 256];
-      av_strerror(result, error_buffer.as_mut_ptr(), error_buffer.len());
-      eprintln!(
-        "avformat_open_input failed: {}",
-        std::ffi::CStr::from_ptr(error_buffer.as_ptr()).to_string_lossy()
-      );
-      return;
+impl<T> GracefulExit<T> for Option<T> {
+  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T {
+    match self {
+      Some(t) => t,
+      None => {
+        eprintln!("{msg}");
+        std::process::exit(1)
+      }
     }
-
-    let iformat = (*format_context).iformat;
-    let duration = (*format_context).duration;
-    if !iformat.is_null() {
-      let format_name = std::ffi::CStr::from_ptr((*iformat).long_name);
-      println!(
-        "Format {}, duration {} us",
-        format_name.to_str().unwrap_or("N/A"),
-        duration
-      );
-    }
-
-    avformat_close_input(&mut format_context);
   }
 }
