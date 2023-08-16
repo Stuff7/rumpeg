@@ -7,17 +7,17 @@ use crate::rumpeg;
 
 #[derive(Debug)]
 pub struct Video {
-  format_context: rumpeg::AVFormatContext,
+  pub duration_us: u64,
+  pub extensions: &'static str,
+  pub format_name: &'static str,
+  pub height: i32,
+  pub mime_type: &'static str,
+  pub width: i32,
   codec_context: rumpeg::AVCodecContext,
-  sws_context: rumpeg::SWSContext,
+  format_context: rumpeg::AVFormatContext,
   pixel_format: i32,
   stream_index: i32,
-  width: i32,
-  height: i32,
-  duration_us: u64,
-  extensions: &'static str,
-  format_name: &'static str,
-  mime_type: &'static str,
+  sws_context: rumpeg::SWSContext,
 }
 
 #[derive(Error, Debug)]
@@ -38,17 +38,17 @@ impl Video {
     let iformat = rumpeg::AVInputFormat::new(format_context.iformat);
 
     Ok(Self {
-      codec_context,
-      sws_context: rumpeg::SWSContext::new(codecpar.width, codecpar.height, codecpar.pixel_format)?,
-      pixel_format: codecpar.pixel_format,
-      stream_index,
-      width: codecpar.width,
-      height: codecpar.height,
       duration_us: format_context.duration as u64,
       extensions: iformat.extensions,
       format_name: iformat.format_name,
+      height: codecpar.height,
       mime_type: iformat.mime_type,
+      width: codecpar.width,
+      codec_context,
       format_context,
+      pixel_format: codecpar.pixel_format,
+      stream_index,
+      sws_context: rumpeg::SWSContext::new(codecpar.width, codecpar.height, codecpar.pixel_format)?,
     })
   }
 
