@@ -6,7 +6,7 @@ use std::ptr;
 
 #[derive(Debug)]
 pub struct AVCodecContext {
-  pub ptr: *mut ffmpeg::AVCodecContext,
+  ptr: *mut ffmpeg::AVCodecContext,
 }
 
 impl AVCodecContext {
@@ -53,6 +53,20 @@ impl Drop for AVCodecContext {
       println!("DROPPING AVCodecContext");
       ffmpeg::avcodec_close(self.ptr);
     }
+  }
+}
+
+impl Deref for AVCodecContext {
+  type Target = ffmpeg::AVCodecContext;
+
+  fn deref(&self) -> &Self::Target {
+    unsafe { &*self.ptr }
+  }
+}
+
+impl DerefMut for AVCodecContext {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    unsafe { &mut *self.ptr }
   }
 }
 

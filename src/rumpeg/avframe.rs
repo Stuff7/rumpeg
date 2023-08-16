@@ -6,7 +6,7 @@ use super::RumpegResult;
 use crate::ffmpeg;
 
 pub struct AVFrame {
-  pub ptr: *mut ffmpeg::AVFrame,
+  ptr: *mut ffmpeg::AVFrame,
 }
 
 impl AVFrame {

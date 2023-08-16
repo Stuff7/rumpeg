@@ -62,8 +62,8 @@ impl Video {
 
       while ffmpeg::av_read_frame(&mut *self.format_context, packet.deref_mut()) >= 0 {
         if packet.stream_index == self.stream_index {
-          ffmpeg::avcodec_send_packet(self.codec_context.ptr, &*packet);
-          let result = ffmpeg::avcodec_receive_frame(self.codec_context.ptr, &mut *frame);
+          ffmpeg::avcodec_send_packet(&mut *self.codec_context, &*packet);
+          let result = ffmpeg::avcodec_receive_frame(&mut *self.codec_context, &mut *frame);
           if result == 0 {
             found_keyframe = true;
             break;
