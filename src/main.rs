@@ -6,6 +6,7 @@ mod ffmpeg {
   include!(concat!(env!("OUT_DIR"), "/ffmpeg.rs"));
 }
 
+mod math;
 mod rumpeg;
 mod video;
 
@@ -17,11 +18,14 @@ fn main() {
   let filepath = args.get(1).unwrap_or_exit("Missing file path").as_str();
   let mut video = Video::open(filepath).unwrap_or_exit("Failed to open video");
   println!("VIDEO {:#?}", video);
-  for i in 0..9 {
-    video
-      .get_thumbnail(i * 5, format!("temp/image-{i}.webp").as_str())
-      .unwrap_or_exit("Failed to get thumbnail");
-  }
+  // for i in 0..9 {
+  //   video
+  //     .get_thumbnail(i * 5, format!("temp/image-{i}.webp").as_str())
+  //     .unwrap_or_exit("Failed to get thumbnail");
+  // }
+  video
+    .get_thumbnail(40, "temp/image.webp")
+    .unwrap_or_exit("Failed to get thumbnail");
 }
 
 trait GracefulExit<T> {

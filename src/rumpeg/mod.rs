@@ -2,15 +2,17 @@ mod avcodec;
 mod avformat;
 mod avframe;
 mod avpacket;
+mod avstream;
 mod sws;
 
 pub use avcodec::*;
 pub use avformat::*;
 pub use avframe::*;
 pub use avpacket::*;
+pub use avstream::*;
 pub use sws::*;
 
-use crate::ffmpeg;
+use crate::{ffmpeg, math::MathError};
 use std::ffi::CStr;
 use thiserror::Error;
 
@@ -26,14 +28,14 @@ pub enum RumpegError {
   AVFrameCreation,
   #[error("No decoder found")]
   DecoderMissing,
-  #[error("No frame found at second {0}")]
-  FrameOutOfBounds(i64),
   #[error("Unknown codec, could not determine pixel format")]
   PixelFormatMissing,
   #[error("sws_getContext failed")]
   SWSContextCreation,
   #[error("No video format found")]
   VideoFormatMissing,
+  #[error(transparent)]
+  Math(#[from] MathError),
 }
 
 impl RumpegError {

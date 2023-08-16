@@ -13,7 +13,7 @@ pub struct AVFormatContext {
 }
 
 impl AVFormatContext {
-  pub fn new(filepath: &str) -> RumpegResult<(Self, i32, *mut ffmpeg::AVCodecParameters)> {
+  pub fn new(filepath: &str) -> RumpegResult<Self> {
     let filename = CString::new(filepath).expect("CString creation failed");
 
     unsafe {
@@ -35,8 +35,20 @@ impl AVFormatContext {
         return Err(RumpegError::from_code(result, "avformat_open_input failed"));
       }
 
+      let iformat = (*ptr).iformat;
+      if iformat.is_null() {
+        ffmpeg::avformat_close_input(&mut ptr);
+        return Err(RumpegError::VideoFormatMissing);
+      }
+
+      Ok(Self { ptr })
+    }
+  }
+
+  pub fn stream(&mut self) -> RumpegResult<AVStream> {
+    unsafe {
       let stream_index = ffmpeg::av_find_best_stream(
-        ptr,
+        self.ptr,
         ffmpeg::AVMediaType_AVMEDIA_TYPE_VIDEO,
         -1,
         -1,
@@ -45,21 +57,17 @@ impl AVFormatContext {
       );
 
       if stream_index < 0 {
-        ffmpeg::avformat_close_input(&mut ptr);
+        ffmpeg::avformat_close_input(&mut self.ptr);
         return Err(RumpegError::from_code(
           stream_index,
           "No video stream found",
         ));
       }
 
-      let iformat = (*ptr).iformat;
-      if iformat.is_null() {
-        ffmpeg::avformat_close_input(&mut ptr);
-        return Err(RumpegError::VideoFormatMissing);
-      }
-
-      let codecpar = (*(*(*ptr).streams.add(stream_index as usize))).codecpar;
-      Ok((Self { ptr }, stream_index, codecpar))
+      Ok(AVStream::new(
+        *self.streams.add(stream_index as usize),
+        stream_index,
+      ))
     }
   }
 

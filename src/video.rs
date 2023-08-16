@@ -32,10 +32,12 @@ type VideoResult<T = ()> = Result<T, VideoError>;
 
 impl Video {
   pub fn open(filepath: &str) -> VideoResult<Video> {
-    let (format_context, stream_index, codecpar) = rumpeg::AVFormatContext::new(filepath)?;
-    let codecpar = rumpeg::AVCodecParameters::new(codecpar)?;
+    let mut format_context = rumpeg::AVFormatContext::new(filepath)?;
+    let stream = format_context.stream()?;
+    let codecpar = rumpeg::AVCodecParameters::new(stream.codecpar)?;
     let codec_context = rumpeg::AVCodecContext::new(&codecpar)?;
     let iformat = rumpeg::AVInputFormat::new(format_context.iformat);
+    stream.display_matrix()?;
 
     Ok(Self {
       duration_us: format_context.duration as u64,
@@ -47,7 +49,7 @@ impl Video {
       codec_context,
       format_context,
       pixel_format: codecpar.pixel_format,
-      stream_index,
+      stream_index: stream.index,
       sws_context: rumpeg::SWSContext::new(codecpar.width, codecpar.height, codecpar.pixel_format)?,
     })
   }
