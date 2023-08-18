@@ -80,8 +80,13 @@ impl AVCodecParameters {
     unsafe {
       let pixel_format = if (*ptr).format == ffmpeg::AVPixelFormat_AV_PIX_FMT_NONE {
         match (*ptr).codec_id {
-          ffmpeg::AVCodecID_AV_CODEC_ID_H264 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-          _ => return Err(RumpegError::PixelFormatMissing),
+          ffmpeg::AVCodecID_AV_CODEC_ID_H264
+          | ffmpeg::AVCodecID_AV_CODEC_ID_HEVC
+          | ffmpeg::AVCodecID_AV_CODEC_ID_MPEG2VIDEO
+          | ffmpeg::AVCodecID_AV_CODEC_ID_VP9
+          | ffmpeg::AVCodecID_AV_CODEC_ID_AV1
+          | ffmpeg::AVCodecID_AV_CODEC_ID_VP8 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+          id => return Err(RumpegError::PixelFormatMissing(id)),
         }
       } else {
         (*ptr).format

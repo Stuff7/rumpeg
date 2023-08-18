@@ -84,13 +84,18 @@ impl AVFrame {
     let src_width = self.width as usize;
     let src_data = self.data();
 
-    let dst_width = self.height;
-    let dst_height = self.width;
+    let rotation = transform.rotation();
+    let (dst_width, dst_height) = if rotation.abs() == 90. {
+      (self.height, self.width)
+    } else {
+      (self.width, self.height)
+    };
     let mut dest = Self::new(self.format, dst_width, dst_height)?;
     let dst_data = dest.data_mut();
 
-    let [a, b, u, c, d, v, _, y, w] = *transform;
-    let x = dst_width - 1;
+    let [a, b, u, c, d, v, x, y, w] = *transform;
+    let x = if x != 0 { dst_width - 1 } else { x };
+    let y = if y != 0 { dst_height - 1 } else { y };
 
     for i in 0..src_data.len() {
       let (p, q) = ((i % src_width) as i32, (i / src_width) as i32);

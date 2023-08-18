@@ -28,8 +28,8 @@ pub enum RumpegError {
   AVFrameCreation,
   #[error("No decoder found")]
   DecoderMissing,
-  #[error("Unknown codec, could not determine pixel format")]
-  PixelFormatMissing,
+  #[error("Unknown codec, could not determine pixel format (Codec ID: {0})")]
+  PixelFormatMissing(i32),
   #[error("sws_getContext failed")]
   SWSContextCreation,
   #[error("No video format found")]
