@@ -65,19 +65,22 @@ impl AVFormatContext {
       }
 
       Ok(AVStream::new(
-        *self.streams.add(stream_index as usize),
+        *self.streams.offset(stream_index as isize),
         stream_index,
       ))
     }
   }
 
-  pub fn seek(&mut self, seconds: i64) -> RumpegResult {
+  pub fn seek(&mut self, position: SeekPosition) -> RumpegResult {
     unsafe {
-      let seconds = ffmpeg::av_rescale_q(
-        seconds,
-        ffmpeg::AVRational { den: 1, num: 1 },
-        ffmpeg::av_get_time_base_q(),
-      );
+      let seconds = match position {
+        SeekPosition::Seconds(n) => ffmpeg::av_rescale_q(
+          n,
+          ffmpeg::AVRational { den: 1, num: 1 },
+          ffmpeg::av_get_time_base_q(),
+        ),
+        SeekPosition::Percentage(n) => ((*self.ptr).duration as f64 * n) as i64,
+      };
       match ffmpeg::av_seek_frame(&mut *self.ptr, -1, seconds, 0) {
         s if s >= 0 => Ok(()),
         e => Err(RumpegError::from_code(e, "Failed to seek")),
@@ -136,6 +139,12 @@ impl Deref for AVInputFormat {
   fn deref(&self) -> &Self::Target {
     unsafe { &*self.ptr }
   }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum SeekPosition {
+  Seconds(i64),
+  Percentage(f64),
 }
 
 fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {

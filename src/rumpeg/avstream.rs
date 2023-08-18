@@ -1,12 +1,6 @@
-use std::{
-  ops::{Deref, DerefMut},
-  ptr,
-};
+use std::ops::{Deref, DerefMut};
 
-use crate::ffmpeg;
-use crate::math;
-
-use super::RumpegResult;
+use crate::{ffmpeg, math::Matrix3x3};
 
 pub struct AVStream {
   ptr: *mut ffmpeg::AVStream,
@@ -18,38 +12,32 @@ impl AVStream {
     Self { ptr, index }
   }
 
-  pub fn display_matrix(&self) -> RumpegResult {
+  pub fn display_matrix(&self) -> Option<Matrix3x3> {
     unsafe {
       let mut current = 0;
       while current < self.nb_side_data {
-        let side_data = self.side_data.offset(current as isize);
+        let side_data = *self.side_data.offset(current as isize);
         current += 1;
-        if (*side_data).type_ == ffmpeg::AVPacketSideDataType_AV_PKT_DATA_DISPLAYMATRIX {
-          println!("Raw Display Matrix:");
-          for i in 0..3 {
-            println!(
-              "{:>8} {:>8} {:>8}",
-              *(*side_data).data.offset(i * 3),
-              *(*side_data).data.offset(i * 3 + 1),
-              *(*side_data).data.offset(i * 3 + 2)
-            );
-          }
-          let display_matrix =
-            math::parse_display_matrix(std::slice::from_raw_parts((*side_data).data, 36))?;
-          println!("Parsed Display Matrix:");
-          for i in 0..3 {
-            println!(
-              "{:>8} {:>8} {:>8}",
-              display_matrix[i * 3],
-              display_matrix[i * 3 + 1],
-              display_matrix[i * 3 + 2]
-            );
-          }
-          return Ok(());
+        if side_data.type_ == ffmpeg::AVPacketSideDataType_AV_PKT_DATA_DISPLAYMATRIX {
+          // println!(
+          //   "AV ROTATION: {}",
+          //   ffmpeg::av_display_rotation_get(side_data.data as *const _) as i64
+          // );
+          // ffmpeg::av_display_rotation_set(side_data.data as *mut _, 0.);
+          // println!(
+          //   "AV ROTATION: {}",
+          //   ffmpeg::av_display_rotation_get(side_data.data as *const _) as i64
+          // );
+          return match Matrix3x3::from_side_data(side_data) {
+            Ok(display_matrix) => Some(display_matrix),
+            Err(e) => {
+              eprintln!("Found display matrix but failed to parse it {e}");
+              None
+            }
+          };
         }
       }
-      println!("DISPLAY MATRIX NOT FOUND");
-      Ok(())
+      None
     }
   }
 }

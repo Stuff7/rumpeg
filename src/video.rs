@@ -3,7 +3,9 @@ use std::ops::DerefMut;
 use thiserror::Error;
 
 use crate::ffmpeg;
+use crate::math;
 use crate::rumpeg;
+use crate::rumpeg::SeekPosition;
 
 #[derive(Debug)]
 pub struct Video {
@@ -14,16 +16,16 @@ pub struct Video {
   pub mime_type: &'static str,
   pub width: i32,
   codec_context: rumpeg::AVCodecContext,
+  display_matrix: Option<math::Matrix3x3>,
   format_context: rumpeg::AVFormatContext,
-  pixel_format: i32,
   stream_index: i32,
   sws_context: rumpeg::SWSContext,
 }
 
 #[derive(Error, Debug)]
 pub enum VideoError {
-  #[error("No frame found at second {0}")]
-  FrameOutOfBounds(i64),
+  #[error("No frame found at second {0:?}")]
+  FrameOutOfBounds(SeekPosition),
   #[error(transparent)]
   Rumpeg(#[from] rumpeg::RumpegError),
 }
@@ -37,7 +39,7 @@ impl Video {
     let codecpar = rumpeg::AVCodecParameters::new(stream.codecpar)?;
     let codec_context = rumpeg::AVCodecContext::new(&codecpar)?;
     let iformat = rumpeg::AVInputFormat::new(format_context.iformat);
-    stream.display_matrix()?;
+    let display_matrix = stream.display_matrix();
 
     Ok(Self {
       duration_us: format_context.duration as u64,
@@ -47,20 +49,24 @@ impl Video {
       mime_type: iformat.mime_type,
       width: codecpar.width,
       codec_context,
+      display_matrix,
       format_context,
-      pixel_format: codecpar.pixel_format,
       stream_index: stream.index,
-      sws_context: rumpeg::SWSContext::new(codecpar.width, codecpar.height, codecpar.pixel_format)?,
+      sws_context: rumpeg::SWSContextBuilder::from_codecpar(codecpar).build()?,
     })
   }
 
-  pub fn get_thumbnail(&mut self, seconds: i64, thumbnail_path: &str) -> VideoResult {
+  pub fn resize_output(&mut self, width: i32, height: i32) -> VideoResult {
+    Ok(self.sws_context.resize_output(width, height)?)
+  }
+
+  pub fn get_frame(&mut self, position: SeekPosition, thumbnail_path: &str) -> VideoResult {
     unsafe {
-      let mut frame = rumpeg::AVFrame::new()?;
-      let mut packet = rumpeg::AVPacket::new();
+      let mut frame = rumpeg::AVFrame::empty()?;
+      let mut packet = rumpeg::AVPacket::empty();
       let mut found_keyframe = false;
 
-      self.format_context.seek(seconds)?;
+      self.format_context.seek(position)?;
 
       while ffmpeg::av_read_frame(&mut *self.format_context, packet.deref_mut()) >= 0 {
         if packet.stream_index == self.stream_index {
@@ -74,11 +80,14 @@ impl Video {
       }
 
       if !found_keyframe {
-        return Err(VideoError::FrameOutOfBounds(seconds));
+        return Err(VideoError::FrameOutOfBounds(position));
       }
 
-      let encoded_data = self.sws_context.encode_as_webp(&mut frame)?;
-      std::fs::write(thumbnail_path, &*encoded_data).expect("Failed to save image");
+      let webp = self
+        .sws_context
+        .transform(&mut frame, self.display_matrix)?
+        .encode_as_webp();
+      std::fs::write(thumbnail_path, &*webp).expect("Failed to save image");
 
       self.codec_context.flush();
       Ok(())

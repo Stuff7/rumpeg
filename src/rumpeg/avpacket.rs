@@ -7,7 +7,7 @@ pub struct AVPacket {
 }
 
 impl AVPacket {
-  pub fn new() -> Self {
+  pub fn empty() -> Self {
     unsafe {
       Self {
         ptr: ffmpeg::av_packet_alloc(),

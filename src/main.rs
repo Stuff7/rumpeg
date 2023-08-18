@@ -13,48 +13,55 @@ mod video;
 use std::env;
 use video::Video;
 
+macro_rules! unwrap {
+  (Some $wrapped: expr, Err $( $err: expr ),*) => {
+    match $wrapped {
+      Some(v) => v,
+      None => {
+        eprint!("\x1b[38;2;255;75;75m");
+        eprintln!($( $err ),*);
+        eprint!("\x1b[0m");
+        return;
+      }
+    }
+  };
+  (Ok $wrapped: expr, Err $( $err: expr ),*) => {
+    match $wrapped {
+      Ok(v) => v,
+      Err(e) => {
+        eprint!("\x1b[38;2;255;75;75m");
+        eprint!($( $err ),*);
+        eprint!(": {e}\n");
+        eprint!("\x1b[0m");
+        return;
+      }
+    }
+  };
+}
+
 fn main() {
   let args: Vec<String> = env::args().collect();
-  let filepath = args.get(1).unwrap_or_exit("Missing file path").as_str();
-  let mut video = Video::open(filepath).unwrap_or_exit("Failed to open video");
+  let filepath = unwrap!(Some args.get(1), Err "Missing file path").as_str();
+  let mut video = unwrap!(Ok Video::open(filepath), Err "Failed to open video");
   println!("VIDEO {:#?}", video);
   // for i in 0..9 {
-  //   video
-  //     .get_thumbnail(i * 5, format!("temp/image-{i}.webp").as_str())
-  //     .unwrap_or_exit("Failed to get thumbnail");
+  //   unwrap!(
+  //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/image-{i}.webp").as_str()),
+  //     Err "Failed to get frame"
+  //   );
   // }
-  video
-    .get_thumbnail(40, "temp/image.webp")
-    .unwrap_or_exit("Failed to get thumbnail");
-}
-
-trait GracefulExit<T> {
-  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T;
-}
-
-impl<T, E> GracefulExit<T> for Result<T, E>
-where
-  E: std::fmt::Display,
-{
-  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T {
-    match self {
-      Ok(t) => t,
-      Err(e) => {
-        eprintln!("{msg}: {e}");
-        std::process::exit(0)
-      }
-    }
-  }
-}
-
-impl<T> GracefulExit<T> for Option<T> {
-  fn unwrap_or_exit(self, msg: impl std::fmt::Display) -> T {
-    match self {
-      Some(t) => t,
-      None => {
-        eprintln!("{msg}");
-        std::process::exit(1)
-      }
-    }
-  }
+  unwrap!(
+    Ok video.resize_output(
+      args
+        .get(2)
+        .and_then(|n| n.parse::<i32>().ok())
+        .unwrap_or_default(),
+      args
+        .get(3)
+        .and_then(|n| n.parse::<i32>().ok())
+        .unwrap_or_default(),
+    ),
+    Err "Failed to resize image"
+  );
+  unwrap!(Ok video.get_frame(rumpeg::SeekPosition::Percentage(0.5), "temp/image.webp"), Err "Failed to get frame");
 }

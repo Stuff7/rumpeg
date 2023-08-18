@@ -13,7 +13,7 @@ pub use avstream::*;
 pub use sws::*;
 
 use crate::{ffmpeg, math::MathError};
-use std::ffi::CStr;
+use std::{ffi::CStr, fmt::Display};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,7 +21,7 @@ pub enum RumpegError {
   #[error("avcodec_alloc_context3 failed")]
   AVCodecContextAllocFail,
   #[error("{0} (Code {1}): {2}")]
-  AVError(&'static str, i32, String),
+  AVError(String, i32, String),
   #[error("avformat_alloc_context failed")]
   AVFormatContextAllocFail,
   #[error("av_frame_alloc failed")]
@@ -39,7 +39,7 @@ pub enum RumpegError {
 }
 
 impl RumpegError {
-  fn from_code(code: i32, msg: &'static str) -> Self {
+  fn from_code(code: i32, msg: impl Display) -> Self {
     unsafe {
       let mut error_buffer: [libc::c_char; 256] = [0; 256];
       ffmpeg::av_strerror(code, error_buffer.as_mut_ptr(), error_buffer.len());
@@ -47,7 +47,7 @@ impl RumpegError {
         .to_string_lossy()
         .to_string();
 
-      RumpegError::AVError(msg, code, error_msg)
+      RumpegError::AVError(msg.to_string(), code, error_msg)
     }
   }
 }
