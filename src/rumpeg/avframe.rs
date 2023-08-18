@@ -130,7 +130,7 @@ impl AVFrame {
     unsafe {
       slice::from_raw_parts(
         *self.image_data,
-        (*self.ptr).linesize[0] as usize * (*self.ptr).height as usize,
+        self.linesize[0] as usize * self.height as usize,
       )
     }
   }
@@ -138,8 +138,8 @@ impl AVFrame {
   pub fn data(&self) -> &[u8] {
     unsafe {
       slice::from_raw_parts(
-        (*self.ptr).data[0],
-        (*self.ptr).linesize[0] as usize * (*self.ptr).height as usize,
+        self.data[0],
+        self.linesize[0] as usize * self.height as usize,
       )
     }
   }
@@ -147,8 +147,8 @@ impl AVFrame {
   pub fn data_mut(&mut self) -> &mut [u8] {
     unsafe {
       slice::from_raw_parts_mut(
-        (*self.ptr).data[0],
-        (*self.ptr).linesize[0] as usize * (*self.ptr).height as usize,
+        self.data[0],
+        self.linesize[0] as usize * self.height as usize,
       )
     }
   }

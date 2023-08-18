@@ -80,7 +80,7 @@ impl AVFormatContext {
           ffmpeg::AVRational { den: 1, num: 1 },
           ffmpeg::av_get_time_base_q(),
         ),
-        SeekPosition::Percentage(n) => (self.duration as f64 * n).floor() as i64,
+        SeekPosition::Percentage(n) => (self.duration as f64 * n) as i64,
       };
       match ffmpeg::av_seek_frame(
         &mut *self.ptr,
