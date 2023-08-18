@@ -57,17 +57,7 @@ impl AVFrame {
         ));
       }
 
-      frame.image_data = ImageBuffer::new(format, width, height)?;
-
-      ffmpeg::av_image_fill_arrays(
-        frame.data.as_mut_ptr() as *mut *mut u8,
-        frame.linesize.as_mut_ptr(),
-        *frame.image_data,
-        frame.format,
-        frame.width,
-        frame.height,
-        1,
-      );
+      frame.image_data = ImageBuffer::new(&mut frame)?;
 
       Ok(frame)
     }
@@ -99,7 +89,8 @@ impl AVFrame {
     let mut dest = Self::new(self.format, dst_width, dst_height)?;
     let dst_data = dest.data_mut();
 
-    let [a, b, u, c, d, v, x, y, w] = *transform;
+    let [a, b, u, c, d, v, _, y, w] = *transform;
+    let x = dst_width - 1;
 
     for i in 0..src_data.len() {
       let (p, q) = ((i % src_width) as i32, (i / src_width) as i32);
@@ -191,16 +182,32 @@ impl ImageBuffer {
       ptr: std::ptr::null_mut(),
     }
   }
-  pub fn new(pixel_format: ffmpeg::AVPixelFormat, width: i32, height: i32) -> RumpegResult<Self> {
+  pub fn new(frame: &mut AVFrame) -> RumpegResult<Self> {
     unsafe {
-      let rgb_size = ffmpeg::av_image_get_buffer_size(pixel_format, width, height, 1);
+      let rgb_size = ffmpeg::av_image_get_buffer_size(frame.format, frame.width, frame.height, 1);
+
       if rgb_size < 0 {
         return Err(RumpegError::from_code(
           rgb_size,
-          "Failed to allocated ImageBuffer",
+          "Failed to get ImageBuffer size",
         ));
       }
+
       let ptr = libc::malloc(rgb_size as usize) as *mut u8;
+      let code = ffmpeg::av_image_fill_arrays(
+        frame.data.as_mut_ptr() as *mut *mut u8,
+        frame.linesize.as_mut_ptr(),
+        ptr,
+        frame.format,
+        frame.width,
+        frame.height,
+        1,
+      );
+
+      if code < 0 {
+        return Err(RumpegError::from_code(code, "Failed to fill ImageBuffer"));
+      }
+
       Ok(Self { ptr })
     }
   }
