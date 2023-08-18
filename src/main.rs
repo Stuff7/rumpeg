@@ -42,13 +42,13 @@ macro_rules! unwrap {
 fn main() {
   let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
   let mut video = unwrap!(Ok Video::open(&args.filepath), Err "Failed to open video");
+  unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");
   // for i in 0..9 {
   //   unwrap!(
-  //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/image-{i}.webp").as_str()),
+  //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/a-image-{i}.webp").as_str()),
   //     Err "Failed to get frame"
   //   );
   // }
-  unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");
   if args.debug {
     println!("{}", video);
   }

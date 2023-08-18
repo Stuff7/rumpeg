@@ -20,7 +20,7 @@ use thiserror::Error;
 pub enum RumpegError {
   #[error("avcodec_alloc_context3 failed")]
   AVCodecContextAllocFail,
-  #[error("{0} (Code {1}): {2}")]
+  #[error("{0}: AVError - {2} (Code {1})")]
   AVError(String, i32, String),
   #[error("avformat_alloc_context failed")]
   AVFormatContextAllocFail,
@@ -39,7 +39,7 @@ pub enum RumpegError {
 }
 
 impl RumpegError {
-  fn from_code(code: i32, msg: impl Display) -> Self {
+  fn from_code(code: i32, msg: &str) -> Self {
     unsafe {
       let mut error_buffer: [libc::c_char; 256] = [0; 256];
       ffmpeg::av_strerror(code, error_buffer.as_mut_ptr(), error_buffer.len());

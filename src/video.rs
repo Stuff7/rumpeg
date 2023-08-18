@@ -114,7 +114,7 @@ impl Display for Video {
         .unwrap_or("None".into()),
       self.display_matrix.map(|m| m.rotation()).unwrap_or(0.),
       self.sws_context,
-      self.duration_us / 100_000,
+      self.duration_us as f64 / 1_000_000.,
       self.extensions,
       self.format_name,
       self.mime_type,

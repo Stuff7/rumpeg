@@ -80,11 +80,19 @@ impl AVFormatContext {
           ffmpeg::AVRational { den: 1, num: 1 },
           ffmpeg::av_get_time_base_q(),
         ),
-        SeekPosition::Percentage(n) => ((*self.ptr).duration as f64 * n) as i64,
+        SeekPosition::Percentage(n) => (self.duration as f64 * n).floor() as i64,
       };
-      match ffmpeg::av_seek_frame(&mut *self.ptr, -1, seconds, 0) {
+      match ffmpeg::av_seek_frame(
+        &mut *self.ptr,
+        -1,
+        seconds,
+        ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
+      ) {
         s if s >= 0 => Ok(()),
-        e => Err(RumpegError::from_code(e, "Failed to seek")),
+        e => Err(RumpegError::from_code(
+          e,
+          &format!("Failed to seek to {seconds} of {}", self.duration),
+        )),
       }
     }
   }

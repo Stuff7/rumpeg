@@ -53,7 +53,7 @@ impl AVFrame {
       if code < 0 {
         return Err(RumpegError::from_code(
           code,
-          format!("Failed to allocate frame {frame}"),
+          &format!("Failed to allocate frame {frame}"),
         ));
       }
 
