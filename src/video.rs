@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::ops::DerefMut;
 
 use thiserror::Error;
@@ -92,5 +93,31 @@ impl Video {
       self.codec_context.flush();
       Ok(())
     }
+  }
+}
+
+impl Display for Video {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "VIDEO INFO\n\
+      - Display Matrix: {}\n\
+      - Rotation: {}°\n\
+      {}\n\
+      - Duration: {} seconds\n\
+      - Extensions: {}\n\
+      - Format: {}\n\
+      - Mime Type: {}",
+      self
+        .display_matrix
+        .map(|m| format!("\n{m}"))
+        .unwrap_or("None".into()),
+      self.display_matrix.map(|m| m.rotation()).unwrap_or(0.),
+      self.sws_context,
+      self.duration_us / 100_000,
+      self.extensions,
+      self.format_name,
+      self.mime_type,
+    )
   }
 }

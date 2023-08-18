@@ -50,7 +50,6 @@ impl AVCodecContext {
 impl Drop for AVCodecContext {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING AVCodecContext");
       ffmpeg::avcodec_close(self.ptr);
     }
   }

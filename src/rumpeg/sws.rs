@@ -80,10 +80,20 @@ impl SWSContext {
   }
 }
 
+impl Display for SWSContext {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "- Input:\n\t{}\n- Output:\n\t{}",
+      self.input.to_string().replace('\n', "\n\t"),
+      self.output.to_string().replace('\n', "\n\t"),
+    )
+  }
+}
+
 impl Drop for SWSContext {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING SWSContext");
       ffmpeg::sws_freeContext(self.ptr);
     }
   }
@@ -158,5 +168,17 @@ impl SWSFrameProperties {
         other.height
       };
     }
+  }
+}
+
+impl Display for SWSFrameProperties {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "- Width: {}\n\
+      - Height: {}\n\
+      - Format: {}",
+      self.width, self.height, self.pixel_format,
+    )
   }
 }

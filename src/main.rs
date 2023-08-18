@@ -6,11 +6,11 @@ mod ffmpeg {
   include!(concat!(env!("OUT_DIR"), "/ffmpeg.rs"));
 }
 
+mod cli;
 mod math;
 mod rumpeg;
 mod video;
 
-use std::env;
 use video::Video;
 
 macro_rules! unwrap {
@@ -40,28 +40,17 @@ macro_rules! unwrap {
 }
 
 fn main() {
-  let args: Vec<String> = env::args().collect();
-  let filepath = unwrap!(Some args.get(1), Err "Missing file path").as_str();
-  let mut video = unwrap!(Ok Video::open(filepath), Err "Failed to open video");
-  println!("VIDEO {:#?}", video);
+  let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
+  let mut video = unwrap!(Ok Video::open(&args.filepath), Err "Failed to open video");
   // for i in 0..9 {
   //   unwrap!(
   //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/image-{i}.webp").as_str()),
   //     Err "Failed to get frame"
   //   );
   // }
-  unwrap!(
-    Ok video.resize_output(
-      args
-        .get(2)
-        .and_then(|n| n.parse::<i32>().ok())
-        .unwrap_or_default(),
-      args
-        .get(3)
-        .and_then(|n| n.parse::<i32>().ok())
-        .unwrap_or_default(),
-    ),
-    Err "Failed to resize image"
-  );
-  unwrap!(Ok video.get_frame(rumpeg::SeekPosition::Percentage(0.5), "temp/image.webp"), Err "Failed to get frame");
+  unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");
+  if args.debug {
+    println!("{}", video);
+  }
+  unwrap!(Ok video.get_frame(args.seek_position, "temp/image.webp"), Err "Failed to get frame");
 }

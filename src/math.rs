@@ -91,7 +91,11 @@ impl fmt::Display for Matrix3x3 {
       for j in 0..3 {
         write!(f, "{:^8}", self[(i, j)])?;
       }
-      writeln!(f, "|")?;
+      if i == 2 {
+        write!(f, "|")?
+      } else {
+        writeln!(f, "|")?
+      };
     }
     Ok(())
   }

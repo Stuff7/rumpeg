@@ -161,7 +161,6 @@ impl AVFrame {
 impl Drop for AVFrame {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING AVFrame");
       ffmpeg::av_frame_free(&mut self.ptr);
     }
   }
@@ -210,7 +209,6 @@ impl ImageBuffer {
 impl Drop for ImageBuffer {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING ImageBuffer");
       libc::free(self.ptr as *mut libc::c_void);
     }
   }

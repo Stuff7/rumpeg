@@ -3,6 +3,7 @@ use std::ffi::CString;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ptr;
+use std::str::FromStr;
 
 use super::*;
 use crate::ffmpeg;
@@ -92,7 +93,6 @@ impl AVFormatContext {
 impl Drop for AVFormatContext {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING AVFormatContext");
       ffmpeg::avformat_close_input(&mut self.ptr);
     }
   }
@@ -145,6 +145,25 @@ impl Deref for AVInputFormat {
 pub enum SeekPosition {
   Seconds(i64),
   Percentage(f64),
+}
+
+impl FromStr for SeekPosition {
+  type Err = Box<dyn std::error::Error>;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(if let Some(s) = s.strip_suffix('s') {
+      Self::Seconds(s.parse()?)
+    } else if let Some(s) = s.strip_suffix('%') {
+      Self::Percentage(s.parse::<f64>()? / 100.)
+    } else {
+      Self::Seconds(s.parse()?)
+    })
+  }
+}
+
+impl Default for SeekPosition {
+  fn default() -> Self {
+    Self::Seconds(0)
+  }
 }
 
 fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {

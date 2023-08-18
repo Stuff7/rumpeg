@@ -19,7 +19,6 @@ impl AVPacket {
 impl Drop for AVPacket {
   fn drop(&mut self) {
     unsafe {
-      println!("DROPPING AVPacket");
       ffmpeg::av_packet_free(&mut self.ptr);
     }
   }
