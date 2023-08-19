@@ -43,24 +43,21 @@ impl AVFrame {
   }
 
   pub fn new(format: i32, width: i32, height: i32) -> RumpegResult<Self> {
-    unsafe {
-      let mut frame = Self::empty()?;
-      frame.format = format;
-      frame.width = width;
-      frame.height = height;
-
-      let code = ffmpeg::av_frame_get_buffer(frame.ptr, 0);
-      if code < 0 {
-        return Err(RumpegError::from_code(
-          code,
-          &format!("Failed to allocate frame {frame}"),
-        ));
-      }
-
-      frame.image_data = ImageBuffer::new(&mut frame)?;
-
-      Ok(frame)
+    let mut frame = Self::empty()?;
+    frame.format = format;
+    frame.width = width;
+    frame.height = height;
+    let code = unsafe { ffmpeg::av_frame_get_buffer(frame.ptr, 0) };
+    if code < 0 {
+      return Err(RumpegError::from_code(
+        code,
+        &format!("Failed to allocate frame {frame}"),
+      ));
     }
+
+    frame.image_data = ImageBuffer::new(&mut frame)?;
+
+    Ok(frame)
   }
 
   /// Applies transformations to frame using `transform` matrix, and returns the transformed frame
