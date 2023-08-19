@@ -5,13 +5,13 @@ use super::*;
 use crate::{ffmpeg, math::Matrix3x3};
 
 #[derive(Debug)]
-pub struct SWSContext {
+pub struct SwsContext {
   ptr: *mut ffmpeg::SwsContext,
   input: SWSFrameProperties,
   output: SWSFrameProperties,
 }
 
-impl SWSContext {
+impl SwsContext {
   pub fn resize_output(&mut self, width: i32, height: i32) -> RumpegResult {
     self.output.width = width;
     self.output.height = height;
@@ -80,7 +80,7 @@ impl SWSContext {
   }
 }
 
-impl Display for SWSContext {
+impl Display for SwsContext {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
@@ -91,7 +91,7 @@ impl Display for SWSContext {
   }
 }
 
-impl Drop for SWSContext {
+impl Drop for SwsContext {
   fn drop(&mut self) {
     unsafe {
       ffmpeg::sws_freeContext(self.ptr);
@@ -121,9 +121,9 @@ impl SWSContextBuilder {
     }
   }
 
-  pub fn build(&mut self) -> RumpegResult<SWSContext> {
-    Ok(SWSContext {
-      ptr: SWSContext::get_context_ptr(ptr::null_mut(), self.input, &mut self.output)?,
+  pub fn build(&mut self) -> RumpegResult<SwsContext> {
+    Ok(SwsContext {
+      ptr: SwsContext::get_context_ptr(ptr::null_mut(), self.input, &mut self.output)?,
       input: self.input,
       output: self.output,
     })
@@ -180,5 +180,19 @@ impl Display for SWSFrameProperties {
       - Format: {}",
       self.width, self.height, self.pixel_format,
     )
+  }
+}
+
+impl std::ops::Deref for SwsContext {
+  type Target = ffmpeg::SwsContext;
+
+  fn deref(&self) -> &Self::Target {
+    unsafe { &*self.ptr }
+  }
+}
+
+impl std::ops::DerefMut for SwsContext {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    unsafe { &mut *self.ptr }
   }
 }

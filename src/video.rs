@@ -17,7 +17,7 @@ pub struct Video {
   display_matrix: Option<math::Matrix3x3>,
   format_context: rumpeg::AVFormatContext,
   stream_index: i32,
-  sws_context: rumpeg::SWSContext,
+  sws_context: rumpeg::SwsContext,
 }
 
 #[derive(Error, Debug)]

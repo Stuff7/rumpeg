@@ -15,7 +15,6 @@ const PX_BYTES: usize = 3;
 #[derive(Debug)]
 pub struct AVFrame {
   ptr: *mut ffmpeg::AVFrame,
-  image_data: ImageBuffer,
 }
 
 impl Display for AVFrame {
@@ -35,10 +34,7 @@ impl AVFrame {
       if ptr.is_null() {
         return Err(RumpegError::AVFrameCreation);
       }
-      Ok(Self {
-        ptr,
-        image_data: ImageBuffer::empty(),
-      })
+      Ok(Self { ptr })
     }
   }
 
@@ -47,15 +43,13 @@ impl AVFrame {
     frame.format = format;
     frame.width = width;
     frame.height = height;
-    let code = unsafe { ffmpeg::av_frame_get_buffer(frame.ptr, 0) };
+    let code = unsafe { ffmpeg::av_frame_get_buffer(frame.ptr, 1) };
     if code < 0 {
       return Err(RumpegError::from_code(
         code,
         &format!("Failed to allocate frame {frame}"),
       ));
     }
-
-    frame.image_data = ImageBuffer::new(&mut frame)?;
 
     Ok(frame)
   }
@@ -120,7 +114,7 @@ impl AVFrame {
   }
 
   pub fn encode_as_webp(&self) -> WebPMemory {
-    Encoder::from_rgb(&self.image_data, self.width as u32, self.height as u32).encode(50.)
+    Encoder::from_rgb(self.data(), self.width as u32, self.height as u32).encode(50.)
   }
 
   pub fn data(&self) -> &[u8] {
@@ -161,59 +155,5 @@ impl Drop for AVFrame {
     unsafe {
       ffmpeg::av_frame_free(&mut self.ptr);
     }
-  }
-}
-
-#[derive(Debug)]
-pub struct ImageBuffer {
-  data: Vec<u8>,
-}
-
-impl ImageBuffer {
-  pub fn empty() -> Self {
-    Self { data: Vec::new() }
-  }
-  pub fn new(frame: &mut AVFrame) -> RumpegResult<Self> {
-    unsafe {
-      let rgb_size = ffmpeg::av_image_get_buffer_size(frame.format, frame.width, frame.height, 1);
-
-      if rgb_size < 0 {
-        return Err(RumpegError::from_code(
-          rgb_size,
-          "Failed to get ImageBuffer size",
-        ));
-      }
-
-      let mut data = vec![0u8; rgb_size as usize + ffmpeg::AV_INPUT_BUFFER_PADDING_SIZE as usize];
-      let code = ffmpeg::av_image_fill_arrays(
-        frame.data.as_mut_ptr() as *mut *mut u8,
-        frame.linesize.as_mut_ptr(),
-        data.as_mut_ptr(),
-        frame.format,
-        frame.width,
-        frame.height,
-        1,
-      );
-
-      if code < 0 {
-        return Err(RumpegError::from_code(code, "Failed to fill ImageBuffer"));
-      }
-
-      Ok(Self { data })
-    }
-  }
-}
-
-impl Deref for ImageBuffer {
-  type Target = Vec<u8>;
-
-  fn deref(&self) -> &Self::Target {
-    &self.data
-  }
-}
-
-impl DerefMut for ImageBuffer {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.data
   }
 }

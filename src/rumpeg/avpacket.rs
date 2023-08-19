@@ -88,21 +88,20 @@ impl<'a> Iterator for AVPacketIter<'a> {
             }
             if result != ffmpeg::AVERROR(ffmpeg::EAGAIN as i32) {
               println!(
-                "Encountered AVError while receiving frame {:?}",
-                RumpegError::from_code(result, "hi")
+                "{}",
+                RumpegError::from_code(result, "Encountered AVError while receiving frame")
               );
               return None;
             }
           }
         },
-        Err(RumpegError::AVError(.., code, err)) => {
-          if code == ffmpeg::AVERROR_EOF {
-            return None;
-          }
-          eprintln!("Encountered AVError while reading frame {code} - {err}")
-        }
         Err(e) => {
-          eprintln!("Encountered AVError while reading frame {e}")
+          if let RumpegError::AVError(_, code, _) = e {
+            if code == ffmpeg::AVERROR_EOF {
+              return None;
+            }
+          }
+          eprintln!("Encountered AVError while reading frame {e}");
         }
       }
     }
