@@ -19,15 +19,6 @@ impl AVStream {
         let side_data = *self.side_data.offset(current as isize);
         current += 1;
         if side_data.type_ == ffmpeg::AVPacketSideDataType_AV_PKT_DATA_DISPLAYMATRIX {
-          // println!(
-          //   "AV ROTATION: {}",
-          //   ffmpeg::av_display_rotation_get(side_data.data as *const _) as i64
-          // );
-          // ffmpeg::av_display_rotation_set(side_data.data as *mut _, 0.);
-          // println!(
-          //   "AV ROTATION: {}",
-          //   ffmpeg::av_display_rotation_get(side_data.data as *const _) as i64
-          // );
           return match Matrix3x3::from_side_data(side_data) {
             Ok(display_matrix) => Some(display_matrix),
             Err(e) => {

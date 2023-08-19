@@ -49,7 +49,7 @@ impl AVFrame {
       frame.width = width;
       frame.height = height;
 
-      let code = ffmpeg::av_frame_get_buffer(frame.ptr, 32);
+      let code = ffmpeg::av_frame_get_buffer(frame.ptr, 0);
       if code < 0 {
         return Err(RumpegError::from_code(
           code,
@@ -63,7 +63,7 @@ impl AVFrame {
     }
   }
 
-  /// Rotates `src_frame` using `transform` matrix and stores it in `dst_frame`
+  /// Applies transformations to frame using `transform` matrix, and returns the transformed frame
   ///
   /// The transformation maps a point `(p, q)` in the source (pre-transformation) frame
   /// to the point `(p', q')` in the destination (post-transformation) frame as follows:
@@ -123,16 +123,7 @@ impl AVFrame {
   }
 
   pub fn encode_as_webp(&self) -> WebPMemory {
-    Encoder::from_rgb(self.image_data(), self.width as u32, self.height as u32).encode(50.)
-  }
-
-  pub fn image_data(&self) -> &[u8] {
-    unsafe {
-      slice::from_raw_parts(
-        *self.image_data,
-        self.linesize[0] as usize * self.height as usize,
-      )
-    }
+    Encoder::from_rgb(&self.image_data, self.width as u32, self.height as u32).encode(50.)
   }
 
   pub fn data(&self) -> &[u8] {
@@ -154,14 +145,6 @@ impl AVFrame {
   }
 }
 
-impl Drop for AVFrame {
-  fn drop(&mut self) {
-    unsafe {
-      ffmpeg::av_frame_free(&mut self.ptr);
-    }
-  }
-}
-
 impl Deref for AVFrame {
   type Target = ffmpeg::AVFrame;
 
@@ -176,16 +159,22 @@ impl DerefMut for AVFrame {
   }
 }
 
+impl Drop for AVFrame {
+  fn drop(&mut self) {
+    unsafe {
+      ffmpeg::av_frame_free(&mut self.ptr);
+    }
+  }
+}
+
 #[derive(Debug)]
 pub struct ImageBuffer {
-  ptr: *mut u8,
+  data: Vec<u8>,
 }
 
 impl ImageBuffer {
   pub fn empty() -> Self {
-    Self {
-      ptr: std::ptr::null_mut(),
-    }
+    Self { data: Vec::new() }
   }
   pub fn new(frame: &mut AVFrame) -> RumpegResult<Self> {
     unsafe {
@@ -198,11 +187,11 @@ impl ImageBuffer {
         ));
       }
 
-      let ptr = libc::malloc(rgb_size as usize) as *mut u8;
+      let mut data = vec![0u8; rgb_size as usize + ffmpeg::AV_INPUT_BUFFER_PADDING_SIZE as usize];
       let code = ffmpeg::av_image_fill_arrays(
         frame.data.as_mut_ptr() as *mut *mut u8,
         frame.linesize.as_mut_ptr(),
-        ptr,
+        data.as_mut_ptr(),
         frame.format,
         frame.width,
         frame.height,
@@ -213,29 +202,21 @@ impl ImageBuffer {
         return Err(RumpegError::from_code(code, "Failed to fill ImageBuffer"));
       }
 
-      Ok(Self { ptr })
-    }
-  }
-}
-
-impl Drop for ImageBuffer {
-  fn drop(&mut self) {
-    unsafe {
-      libc::free(self.ptr as *mut libc::c_void);
+      Ok(Self { data })
     }
   }
 }
 
 impl Deref for ImageBuffer {
-  type Target = *mut u8;
+  type Target = Vec<u8>;
 
   fn deref(&self) -> &Self::Target {
-    &self.ptr
+    &self.data
   }
 }
 
 impl DerefMut for ImageBuffer {
   fn deref_mut(&mut self) -> &mut Self::Target {
-    &mut self.ptr
+    &mut self.data
   }
 }

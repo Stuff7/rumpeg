@@ -1,12 +1,9 @@
-use std::fmt::Display;
-use std::ops::DerefMut;
-
-use thiserror::Error;
-
-use crate::ffmpeg;
 use crate::math;
 use crate::rumpeg;
+use crate::rumpeg::RumpegResult;
 use crate::rumpeg::SeekPosition;
+use std::fmt::Display;
+use thiserror::Error;
 
 #[derive(Debug)]
 pub struct Video {
@@ -25,8 +22,6 @@ pub struct Video {
 
 #[derive(Error, Debug)]
 pub enum VideoError {
-  #[error("No frame found at second {0:?}")]
-  FrameOutOfBounds(SeekPosition),
   #[error(transparent)]
   Rumpeg(#[from] rumpeg::RumpegError),
 }
@@ -62,37 +57,50 @@ impl Video {
   }
 
   pub fn get_frame(&mut self, position: SeekPosition, thumbnail_path: &str) -> VideoResult {
-    unsafe {
-      let mut frame = rumpeg::AVFrame::empty()?;
-      let mut packet = rumpeg::AVPacket::empty();
-      let mut found_keyframe = false;
+    self.seek(position)?;
 
-      self.format_context.seek(position)?;
-
-      while ffmpeg::av_read_frame(&mut *self.format_context, packet.deref_mut()) >= 0 {
-        if packet.stream_index == self.stream_index {
-          ffmpeg::avcodec_send_packet(&mut *self.codec_context, &*packet);
-          let result = ffmpeg::avcodec_receive_frame(&mut *self.codec_context, &mut *frame);
-          if result == 0 {
-            found_keyframe = true;
-            break;
-          }
-        }
-      }
-
-      if !found_keyframe {
-        return Err(VideoError::FrameOutOfBounds(position));
-      }
-
+    if let Some(mut frame) = self.frames().next() {
       let webp = self
         .sws_context
         .transform(&mut frame, self.display_matrix)?
         .encode_as_webp();
-      std::fs::write(thumbnail_path, &*webp).expect("Failed to save image");
-
-      self.codec_context.flush();
-      Ok(())
+      std::fs::write(format!("{thumbnail_path}.webp"), &*webp).expect("Failed to save image");
     }
+
+    Ok(())
+  }
+
+  pub fn burst_frames(&mut self, mut position: SeekPosition, thumbnail_path: &str) -> VideoResult {
+    self.seek(position)?;
+    let mut i = 0;
+
+    while let Some(mut curr_frame) = self.frames().next() {
+      let webp = self
+        .sws_context
+        .transform(&mut curr_frame, self.display_matrix)?
+        .encode_as_webp();
+      std::fs::write(format!("{thumbnail_path}-{i}.webp"), &*webp).expect("Failed to save image");
+      i += 1;
+      position += SeekPosition::Seconds(5);
+      if self.seek(position).is_err() {
+        break;
+      }
+    }
+
+    Ok(())
+  }
+
+  fn seek(&self, position: SeekPosition) -> RumpegResult {
+    self.codec_context.flush();
+    self.format_context.seek(position)
+  }
+
+  fn frames(&mut self) -> rumpeg::AVPacketIter {
+    rumpeg::AVPacketIter::new(
+      &mut self.format_context,
+      &mut self.codec_context,
+      self.stream_index,
+    )
   }
 }
 

@@ -47,14 +47,6 @@ impl AVCodecContext {
   }
 }
 
-impl Drop for AVCodecContext {
-  fn drop(&mut self) {
-    unsafe {
-      ffmpeg::avcodec_close(self.ptr);
-    }
-  }
-}
-
 impl Deref for AVCodecContext {
   type Target = ffmpeg::AVCodecContext;
 
@@ -66,6 +58,14 @@ impl Deref for AVCodecContext {
 impl DerefMut for AVCodecContext {
   fn deref_mut(&mut self) -> &mut Self::Target {
     unsafe { &mut *self.ptr }
+  }
+}
+
+impl Drop for AVCodecContext {
+  fn drop(&mut self) {
+    unsafe {
+      ffmpeg::avcodec_close(self.ptr);
+    }
   }
 }
 

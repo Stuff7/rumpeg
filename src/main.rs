@@ -1,12 +1,5 @@
-mod ffmpeg {
-  #![allow(non_upper_case_globals)]
-  #![allow(non_camel_case_types)]
-  #![allow(non_snake_case)]
-  #![allow(dead_code)]
-  include!(concat!(env!("OUT_DIR"), "/ffmpeg.rs"));
-}
-
 mod cli;
+mod ffmpeg;
 mod math;
 mod rumpeg;
 mod video;
@@ -45,12 +38,13 @@ fn main() {
   unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");
   // for i in 0..9 {
   //   unwrap!(
-  //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/a-image-{i}.webp").as_str()),
+  //     Ok video.get_frame(rumpeg::SeekPosition::Seconds(i * 5), format!("temp/a-image-{i}").as_str()),
   //     Err "Failed to get frame"
   //   );
   // }
   if args.debug {
     println!("{}", video);
   }
-  unwrap!(Ok video.get_frame(args.seek_position, "temp/image.webp"), Err "Failed to get frame");
+  unwrap!(Ok video.burst_frames(args.seek_position, "temp/image"), Err "Failed to get burst frames");
+  unwrap!(Ok video.get_frame(args.seek_position, "temp/image"), Err "Failed to get frame");
 }

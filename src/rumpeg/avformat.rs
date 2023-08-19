@@ -1,5 +1,7 @@
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::ops::Add;
+use std::ops::AddAssign;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ptr;
@@ -20,7 +22,6 @@ impl AVFormatContext {
     unsafe {
       let mut ptr = ffmpeg::avformat_alloc_context();
       if ptr.is_null() {
-        ffmpeg::avformat_close_input(&mut ptr);
         return Err(RumpegError::AVFormatContextAllocFail);
       }
 
@@ -72,7 +73,7 @@ impl AVFormatContext {
     }
   }
 
-  pub fn seek(&mut self, position: SeekPosition) -> RumpegResult {
+  pub fn seek(&self, position: SeekPosition) -> RumpegResult {
     unsafe {
       let seconds = match position {
         SeekPosition::Seconds(n) => ffmpeg::av_rescale_q(
@@ -86,7 +87,7 @@ impl AVFormatContext {
         &mut *self.ptr,
         -1,
         seconds,
-        ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
+        ffmpeg::AVSEEK_FLAG_FRAME as i32,
       ) {
         s if s >= 0 => Ok(()),
         e => Err(RumpegError::from_code(
@@ -94,14 +95,6 @@ impl AVFormatContext {
           &format!("Failed to seek to {seconds} of {}", self.duration),
         )),
       }
-    }
-  }
-}
-
-impl Drop for AVFormatContext {
-  fn drop(&mut self) {
-    unsafe {
-      ffmpeg::avformat_close_input(&mut self.ptr);
     }
   }
 }
@@ -117,6 +110,14 @@ impl Deref for AVFormatContext {
 impl DerefMut for AVFormatContext {
   fn deref_mut(&mut self) -> &mut Self::Target {
     unsafe { &mut *self.ptr }
+  }
+}
+
+impl Drop for AVFormatContext {
+  fn drop(&mut self) {
+    unsafe {
+      ffmpeg::avformat_close_input(&mut self.ptr);
+    }
   }
 }
 
@@ -153,6 +154,30 @@ impl Deref for AVInputFormat {
 pub enum SeekPosition {
   Seconds(i64),
   Percentage(f64),
+}
+
+impl Add for SeekPosition {
+  type Output = SeekPosition;
+
+  fn add(self, other: SeekPosition) -> SeekPosition {
+    match (self, other) {
+      (SeekPosition::Seconds(a), SeekPosition::Seconds(b)) => SeekPosition::Seconds(a + b),
+      (SeekPosition::Percentage(a), SeekPosition::Percentage(b)) => SeekPosition::Percentage(a + b),
+      (SeekPosition::Seconds(a), SeekPosition::Percentage(b)) => {
+        SeekPosition::Seconds((a as f64 + b * a as f64) as i64)
+      }
+      (SeekPosition::Percentage(a), SeekPosition::Seconds(b)) => {
+        SeekPosition::Seconds((b as f64 + a * b as f64) as i64)
+      }
+    }
+  }
+}
+
+impl AddAssign for SeekPosition {
+  fn add_assign(&mut self, other: SeekPosition) {
+    let result = *self + other;
+    *self = result;
+  }
 }
 
 impl FromStr for SeekPosition {
