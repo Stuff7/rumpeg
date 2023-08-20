@@ -1,7 +1,4 @@
-use std::ffi::CStr;
 use std::ffi::CString;
-use std::ops::Add;
-use std::ops::AddAssign;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ptr;
@@ -13,6 +10,7 @@ use crate::ffmpeg;
 #[derive(Debug)]
 pub struct AVFormatContext {
   ptr: *mut ffmpeg::AVFormatContext,
+  pub stream: AVStream,
 }
 
 impl AVFormatContext {
@@ -43,49 +41,29 @@ impl AVFormatContext {
         return Err(RumpegError::VideoFormatMissing);
       }
 
-      Ok(Self { ptr })
-    }
-  }
-
-  pub fn stream(&mut self) -> RumpegResult<AVStream> {
-    unsafe {
-      let stream_index = ffmpeg::av_find_best_stream(
-        self.ptr,
-        ffmpeg::AVMediaType_AVMEDIA_TYPE_VIDEO,
-        -1,
-        -1,
-        ptr::null_mut(),
-        0,
-      );
-
-      if stream_index < 0 {
-        ffmpeg::avformat_close_input(&mut self.ptr);
+      let result = ffmpeg::avformat_find_stream_info(ptr, ptr::null_mut());
+      if result < 0 {
+        ffmpeg::avformat_close_input(&mut ptr);
         return Err(RumpegError::from_code(
-          stream_index,
-          "No video stream found",
+          result,
+          "avformat_find_stream_info failed",
         ));
       }
 
-      Ok(AVStream::new(
-        *self.streams.offset(stream_index as isize),
-        stream_index,
-      ))
+      Ok(Self {
+        ptr,
+        stream: AVStream::new(ptr)?,
+      })
     }
   }
 
   pub fn seek(&self, position: SeekPosition) -> RumpegResult {
     unsafe {
-      let seconds = match position {
-        SeekPosition::Seconds(n) => ffmpeg::av_rescale_q(
-          n,
-          ffmpeg::AVRational { den: 1, num: 1 },
-          ffmpeg::av_get_time_base_q(),
-        ),
-        SeekPosition::Percentage(n) => (self.duration as f64 * n) as i64,
-      };
+      let seconds = self.stream.to_time_base(position);
+
       match ffmpeg::av_seek_frame(
         &mut *self.ptr,
-        -1,
+        self.stream.index,
         seconds,
         ffmpeg::AVSEEK_FLAG_FRAME as i32,
       ) {
@@ -154,30 +132,7 @@ impl Deref for AVInputFormat {
 pub enum SeekPosition {
   Seconds(i64),
   Percentage(f64),
-}
-
-impl Add for SeekPosition {
-  type Output = SeekPosition;
-
-  fn add(self, other: SeekPosition) -> SeekPosition {
-    match (self, other) {
-      (SeekPosition::Seconds(a), SeekPosition::Seconds(b)) => SeekPosition::Seconds(a + b),
-      (SeekPosition::Percentage(a), SeekPosition::Percentage(b)) => SeekPosition::Percentage(a + b),
-      (SeekPosition::Seconds(a), SeekPosition::Percentage(b)) => {
-        SeekPosition::Seconds((a as f64 + b * a as f64) as i64)
-      }
-      (SeekPosition::Percentage(a), SeekPosition::Seconds(b)) => {
-        SeekPosition::Seconds((b as f64 + a * b as f64) as i64)
-      }
-    }
-  }
-}
-
-impl AddAssign for SeekPosition {
-  fn add_assign(&mut self, other: SeekPosition) {
-    let result = *self + other;
-    *self = result;
-  }
+  TimeBase(i64),
 }
 
 impl FromStr for SeekPosition {
@@ -195,14 +150,6 @@ impl FromStr for SeekPosition {
 
 impl Default for SeekPosition {
   fn default() -> Self {
-    Self::Seconds(0)
-  }
-}
-
-fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {
-  unsafe {
-    (!ptr.is_null())
-      .then(|| CStr::from_ptr(ptr).to_str().ok())
-      .flatten()
+    Self::TimeBase(0)
   }
 }

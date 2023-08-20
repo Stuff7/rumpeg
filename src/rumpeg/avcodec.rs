@@ -78,20 +78,33 @@ pub struct AVCodecParameters {
 impl AVCodecParameters {
   pub fn new(ptr: *mut ffmpeg::AVCodecParameters) -> RumpegResult<Self> {
     unsafe {
-      let pixel_format = if (*ptr).format == ffmpeg::AVPixelFormat_AV_PIX_FMT_NONE {
-        match (*ptr).codec_id {
-          ffmpeg::AVCodecID_AV_CODEC_ID_H264
-          | ffmpeg::AVCodecID_AV_CODEC_ID_HEVC
-          | ffmpeg::AVCodecID_AV_CODEC_ID_MPEG2VIDEO
-          | ffmpeg::AVCodecID_AV_CODEC_ID_VP9
-          | ffmpeg::AVCodecID_AV_CODEC_ID_AV1
-          | ffmpeg::AVCodecID_AV_CODEC_ID_VP8 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-          id => return Err(RumpegError::PixelFormatMissing(id)),
-        }
-      } else {
-        (*ptr).format
-      };
+      let pixel_format =
+        Self::validate_format(if (*ptr).format == ffmpeg::AVPixelFormat_AV_PIX_FMT_NONE {
+          match (*ptr).codec_id {
+            ffmpeg::AVCodecID_AV_CODEC_ID_H264
+            | ffmpeg::AVCodecID_AV_CODEC_ID_HEVC
+            | ffmpeg::AVCodecID_AV_CODEC_ID_MPEG2VIDEO
+            | ffmpeg::AVCodecID_AV_CODEC_ID_VP9
+            | ffmpeg::AVCodecID_AV_CODEC_ID_AV1
+            | ffmpeg::AVCodecID_AV_CODEC_ID_VP8 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+            id => return Err(RumpegError::PixelFormatMissing(id)),
+          }
+        } else {
+          (*ptr).format
+        });
       Ok(Self { ptr, pixel_format })
+    }
+  }
+
+  pub fn validate_format(format: ffmpeg::AVPixelFormat) -> ffmpeg::AVPixelFormat {
+    match format {
+      // These are deprecated
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ420P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ422P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV422P,
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ444P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV444P,
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ440P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV440P,
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ411P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV411P,
+      _ => format,
     }
   }
 }

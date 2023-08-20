@@ -1,9 +1,11 @@
+mod ascii;
 mod cli;
 mod ffmpeg;
 mod math;
 mod rumpeg;
 mod video;
 
+use ascii::Color;
 use video::Video;
 
 macro_rules! unwrap {
@@ -11,9 +13,8 @@ macro_rules! unwrap {
     match $wrapped {
       Some(v) => v,
       None => {
-        eprint!("\x1b[38;2;255;75;75m");
-        eprintln!($( $err ),*);
-        eprint!("\x1b[0m");
+        log!(ln err@$( $err ),*);
+        println!();
         return;
       }
     }
@@ -22,10 +23,8 @@ macro_rules! unwrap {
     match $wrapped {
       Ok(v) => v,
       Err(e) => {
-        eprint!("\x1b[38;2;255;75;75m");
-        eprint!($( $err ),*);
-        eprint!(": {e}\n");
-        eprint!("\x1b[0m");
+        log!(err@$( $err ),*);
+        log!(": {e}\n");
         return;
       }
     }
@@ -33,6 +32,7 @@ macro_rules! unwrap {
 }
 
 fn main() {
+  log!(success@"FFMPEG VERSION: {}\n", rumpeg::version());
   let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
   let mut video = unwrap!(Ok Video::open(&args.filepath), Err "Failed to open video");
   unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");

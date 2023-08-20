@@ -2,7 +2,10 @@ use std::ptr;
 
 use super::*;
 
-use crate::{ffmpeg, math::Matrix3x3};
+use crate::ascii::Color;
+use crate::ascii::RESET;
+use crate::ffmpeg;
+use crate::math::Matrix3x3;
 
 #[derive(Debug)]
 pub struct SwsContext {
@@ -15,12 +18,13 @@ impl SwsContext {
   pub fn resize_output(&mut self, width: i32, height: i32) -> RumpegResult {
     self.output.width = width;
     self.output.height = height;
-    self.ptr = Self::get_context_ptr(self.ptr, self.input, &mut self.output)?;
+    self.output.copy_aspect_ratio(self.input);
+    self.ptr = Self::get_context_ptr(self.ptr, self.input, self.output)?;
     Ok(())
   }
 
   pub fn transform(
-    &self,
+    &mut self,
     input: &mut AVFrame,
     transform: Option<Matrix3x3>,
   ) -> RumpegResult<AVFrame> {
@@ -53,10 +57,9 @@ impl SwsContext {
   fn get_context_ptr(
     ptr: *mut ffmpeg::SwsContext,
     input: SWSFrameProperties,
-    output: &mut SWSFrameProperties,
+    output: SWSFrameProperties,
   ) -> RumpegResult<*mut ffmpeg::SwsContext> {
     unsafe {
-      output.copy_aspect_ratio(input);
       let ptr = ffmpeg::sws_getCachedContext(
         ptr,
         input.width,
@@ -84,9 +87,10 @@ impl Display for SwsContext {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
-      "- Input:\n\t{}\n- Output:\n\t{}",
-      self.input.to_string().replace('\n', "\n\t"),
-      self.output.to_string().replace('\n', "\n\t"),
+      "- {title}Input:{RESET}\n  {}\n- {title}Output:{RESET}\n  {}",
+      self.input.to_string().replace('\n', "\n  "),
+      self.output.to_string().replace('\n', "\n  "),
+      title = "".rgb(75, 200, 200),
     )
   }
 }
@@ -122,8 +126,9 @@ impl SWSContextBuilder {
   }
 
   pub fn build(&mut self) -> RumpegResult<SwsContext> {
+    self.output.copy_aspect_ratio(self.input);
     Ok(SwsContext {
-      ptr: SwsContext::get_context_ptr(ptr::null_mut(), self.input, &mut self.output)?,
+      ptr: SwsContext::get_context_ptr(ptr::null_mut(), self.input, self.output)?,
       input: self.input,
       output: self.output,
     })
@@ -175,10 +180,13 @@ impl Display for SWSFrameProperties {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
-      "- Width: {}\n\
-      - Height: {}\n\
-      - Format: {}",
-      self.width, self.height, self.pixel_format,
+      "- {title}Width:{RESET} {}\n\
+      - {title}Height:{RESET} {}\n\
+      - {title}Format:{RESET} {}",
+      self.width,
+      self.height,
+      self.pixel_format,
+      title = "".rgb(75, 200, 200),
     )
   }
 }

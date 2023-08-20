@@ -1,7 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
 use super::*;
-use crate::ffmpeg;
+use crate::ascii::Color;
+use crate::{ffmpeg, log};
 
 pub struct AVPacket {
   ptr: *mut ffmpeg::AVPacket,
@@ -53,19 +54,19 @@ impl Drop for AVPacket {
 pub struct AVPacketIter<'a> {
   format_context: &'a mut AVFormatContext,
   codec_context: &'a mut AVCodecContext,
-  stream_index: i32,
+  step: SeekPosition,
 }
 
 impl<'a> AVPacketIter<'a> {
   pub fn new(
     format_context: &'a mut AVFormatContext,
     codec_context: &'a mut AVCodecContext,
-    stream_index: i32,
+    step: Option<SeekPosition>,
   ) -> Self {
     Self {
       format_context,
       codec_context,
-      stream_index,
+      step: step.unwrap_or_default(),
     }
   }
 }
@@ -76,18 +77,24 @@ impl<'a> Iterator for AVPacketIter<'a> {
   fn next(&mut self) -> Option<<Self as Iterator>::Item> {
     let Ok(mut frame) = AVFrame::empty() else {return None};
     let mut packet = AVPacket::empty();
+    let step = self.format_context.stream.to_time_base(self.step);
 
     loop {
       match packet.read(self.format_context) {
         Ok(..) => unsafe {
-          if packet.stream_index == self.stream_index {
+          if packet.stream_index == self.format_context.stream.index {
             ffmpeg::avcodec_send_packet(self.codec_context.deref_mut(), &*packet);
             let result = ffmpeg::avcodec_receive_frame(self.codec_context.deref_mut(), &mut *frame);
             if result == 0 {
+              self.codec_context.flush();
+              self
+                .format_context
+                .seek(SeekPosition::TimeBase(frame.pts + step))
+                .ok();
               return Some(frame);
             }
             if result != ffmpeg::AVERROR(ffmpeg::EAGAIN as i32) {
-              println!(
+              log!(err@
                 "{}",
                 RumpegError::from_code(result, "Encountered AVError while receiving frame")
               );
@@ -101,7 +108,7 @@ impl<'a> Iterator for AVPacketIter<'a> {
               return None;
             }
           }
-          eprintln!("Encountered AVError while reading frame {e}");
+          log!(err@"Encountered AVError while reading frame {e}");
         }
       }
     }

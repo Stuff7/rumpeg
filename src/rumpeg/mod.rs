@@ -53,3 +53,15 @@ impl RumpegError {
 }
 
 pub type RumpegResult<T = ()> = Result<T, RumpegError>;
+
+pub fn version() -> &'static str {
+  unsafe { ptr_to_str(ffmpeg::av_version_info()).unwrap_or("N/A") }
+}
+
+pub fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {
+  unsafe {
+    (!ptr.is_null())
+      .then(|| CStr::from_ptr(ptr).to_str().ok())
+      .flatten()
+  }
+}

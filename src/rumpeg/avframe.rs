@@ -1,14 +1,10 @@
+use super::*;
+use crate::ffmpeg;
+use crate::math;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::slice;
-
 use webp::{Encoder, WebPMemory};
-
-use super::RumpegError;
-use super::RumpegResult;
-
-use crate::ffmpeg;
-use crate::math;
 
 const PX_BYTES: usize = 3;
 

@@ -1,15 +1,49 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{ffmpeg, math::Matrix3x3};
+use super::*;
+use crate::ascii::Color;
+use crate::{ffmpeg, log, math::Matrix3x3};
 
+#[derive(Debug)]
 pub struct AVStream {
   ptr: *mut ffmpeg::AVStream,
   pub index: i32,
 }
 
 impl AVStream {
-  pub(super) fn new(ptr: *mut ffmpeg::AVStream, index: i32) -> Self {
-    Self { ptr, index }
+  pub(super) fn new(mut format_context: *mut ffmpeg::AVFormatContext) -> RumpegResult<Self> {
+    unsafe {
+      let index = ffmpeg::av_find_best_stream(
+        format_context,
+        ffmpeg::AVMediaType_AVMEDIA_TYPE_VIDEO,
+        -1,
+        -1,
+        std::ptr::null_mut(),
+        0,
+      );
+
+      if index < 0 {
+        ffmpeg::avformat_close_input(&mut format_context);
+        return Err(RumpegError::from_code(index, "No video stream found"));
+      }
+
+      Ok(Self {
+        ptr: *(*format_context).streams.offset(index as isize),
+        index,
+      })
+    }
+  }
+
+  pub fn to_time_base(&self, position: SeekPosition) -> i64 {
+    unsafe {
+      match position {
+        SeekPosition::Seconds(n) => {
+          ffmpeg::av_rescale_q(n, ffmpeg::AVRational { den: 1, num: 1 }, self.time_base)
+        }
+        SeekPosition::Percentage(n) => (self.duration as f64 * n) as i64,
+        SeekPosition::TimeBase(n) => n,
+      }
+    }
   }
 
   pub fn display_matrix(&self) -> Option<Matrix3x3> {
@@ -22,7 +56,7 @@ impl AVStream {
           return match Matrix3x3::from_side_data(side_data) {
             Ok(display_matrix) => Some(display_matrix),
             Err(e) => {
-              eprintln!("Found display matrix but failed to parse it {e}");
+              log!(err@"Found display matrix but failed to parse it {e}");
               None
             }
           };
