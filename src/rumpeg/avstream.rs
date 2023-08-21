@@ -11,8 +11,13 @@ pub struct AVStream {
 }
 
 impl AVStream {
-  pub(super) fn new(mut format_context: *mut ffmpeg::AVFormatContext) -> RumpegResult<Self> {
+  pub(super) fn new(format_context: *mut ffmpeg::AVFormatContext) -> RumpegResult<Self> {
     unsafe {
+      let result = ffmpeg::avformat_find_stream_info(format_context, std::ptr::null_mut());
+      if result < 0 {
+        return Err(RumpegError::from_code(result, "Could not find stream info"));
+      }
+
       let index = ffmpeg::av_find_best_stream(
         format_context,
         ffmpeg::AVMediaType_AVMEDIA_TYPE_VIDEO,
@@ -21,9 +26,7 @@ impl AVStream {
         std::ptr::null_mut(),
         0,
       );
-
       if index < 0 {
-        ffmpeg::avformat_close_input(&mut format_context);
         return Err(RumpegError::from_code(index, "No video stream found"));
       }
 
@@ -34,11 +37,14 @@ impl AVStream {
     }
   }
 
-  pub fn to_time_base(&self, position: SeekPosition) -> i64 {
+  pub fn as_time_base(&self, position: SeekPosition) -> i64 {
     unsafe {
       match position {
         SeekPosition::Seconds(n) => {
           ffmpeg::av_rescale_q(n, ffmpeg::AVRational { den: 1, num: 1 }, self.time_base)
+        }
+        SeekPosition::Milliseconds(n) => {
+          ffmpeg::av_rescale_q(n, ffmpeg::AVRational { num: 1, den: 1000 }, self.time_base)
         }
         SeekPosition::Percentage(n) => (self.duration as f64 * n) as i64,
         SeekPosition::TimeBase(n) => n,

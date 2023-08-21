@@ -1,4 +1,4 @@
-use super::{RumpegError, RumpegResult};
+use super::*;
 use crate::ffmpeg;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -7,12 +7,13 @@ use std::ptr;
 #[derive(Debug)]
 pub struct AVCodecContext {
   ptr: *mut ffmpeg::AVCodecContext,
+  pub format: ffmpeg::AVPixelFormat,
 }
 
 impl AVCodecContext {
-  pub fn new(codecpar: &AVCodecParameters) -> RumpegResult<Self> {
+  pub fn new(codecpar: *mut ffmpeg::AVCodecParameters) -> RumpegResult<Self> {
     unsafe {
-      let codec = ffmpeg::avcodec_find_decoder(codecpar.codec_id);
+      let codec = ffmpeg::avcodec_find_decoder((*codecpar).codec_id);
       if codec.is_null() {
         return Err(RumpegError::DecoderMissing);
       }
@@ -22,20 +23,45 @@ impl AVCodecContext {
         return Err(RumpegError::AVCodecContextAllocFail);
       }
 
-      let result = ffmpeg::avcodec_parameters_to_context(ptr, codecpar.ptr);
+      let result = ffmpeg::avcodec_parameters_to_context(ptr, codecpar);
       if result < 0 {
         return Err(RumpegError::from_code(
           result,
-          "avcodec_parameters_to_context failed",
+          "Could not get AVCodecContext from codec parameters",
         ));
       }
 
       let result = ffmpeg::avcodec_open2(ptr, codec, ptr::null_mut());
       if result < 0 {
-        return Err(RumpegError::from_code(result, "avcodec_open2 failed"));
+        return Err(RumpegError::from_code(result, "Could not open AVCodec"));
       }
 
-      Ok(Self { ptr })
+      let format = if (*ptr).pix_fmt == ffmpeg::AVPixelFormat_AV_PIX_FMT_NONE {
+        match (*ptr).codec_id {
+          ffmpeg::AVCodecID_AV_CODEC_ID_H264
+          | ffmpeg::AVCodecID_AV_CODEC_ID_HEVC
+          | ffmpeg::AVCodecID_AV_CODEC_ID_MPEG2VIDEO
+          | ffmpeg::AVCodecID_AV_CODEC_ID_VP9
+          | ffmpeg::AVCodecID_AV_CODEC_ID_AV1
+          | ffmpeg::AVCodecID_AV_CODEC_ID_VP8 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+          id => return Err(RumpegError::PixelFormatMissing(id)),
+        }
+      } else {
+        (*ptr).pix_fmt
+      };
+
+      Ok(Self {
+        ptr,
+        format: match format {
+          // These are deprecated
+          ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ420P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+          ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ422P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV422P,
+          ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ444P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV444P,
+          ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ440P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV440P,
+          ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ411P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV411P,
+          _ => format,
+        },
+      })
     }
   }
 
@@ -44,6 +70,23 @@ impl AVCodecContext {
     unsafe {
       ffmpeg::avcodec_flush_buffers(self.ptr);
     }
+  }
+
+  // pub fn receive_frame(&self) -> RumpegResult<AVFrame> {
+  //   unsafe {
+  //     let mut frame = AVFrame::empty()?;
+  //     match ffmpeg::avcodec_receive_frame(self.ptr, &mut *frame) {
+  //       e if e != 0 => Err(RumpegError::from_code(
+  //         e,
+  //         "Encountered AVError while receiving frame",
+  //       )),
+  //       _ => Ok(frame),
+  //     }
+  //   }
+  // }
+
+  pub fn as_ptr(&self) -> *mut ffmpeg::AVCodecContext {
+    self.ptr
   }
 }
 
@@ -66,59 +109,5 @@ impl Drop for AVCodecContext {
     unsafe {
       ffmpeg::avcodec_close(self.ptr);
     }
-  }
-}
-
-#[derive(Debug)]
-pub struct AVCodecParameters {
-  ptr: *mut ffmpeg::AVCodecParameters,
-  pub pixel_format: i32,
-}
-
-impl AVCodecParameters {
-  pub fn new(ptr: *mut ffmpeg::AVCodecParameters) -> RumpegResult<Self> {
-    unsafe {
-      let pixel_format =
-        Self::validate_format(if (*ptr).format == ffmpeg::AVPixelFormat_AV_PIX_FMT_NONE {
-          match (*ptr).codec_id {
-            ffmpeg::AVCodecID_AV_CODEC_ID_H264
-            | ffmpeg::AVCodecID_AV_CODEC_ID_HEVC
-            | ffmpeg::AVCodecID_AV_CODEC_ID_MPEG2VIDEO
-            | ffmpeg::AVCodecID_AV_CODEC_ID_VP9
-            | ffmpeg::AVCodecID_AV_CODEC_ID_AV1
-            | ffmpeg::AVCodecID_AV_CODEC_ID_VP8 => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-            id => return Err(RumpegError::PixelFormatMissing(id)),
-          }
-        } else {
-          (*ptr).format
-        });
-      Ok(Self { ptr, pixel_format })
-    }
-  }
-
-  pub fn validate_format(format: ffmpeg::AVPixelFormat) -> ffmpeg::AVPixelFormat {
-    match format {
-      // These are deprecated
-      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ420P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ422P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV422P,
-      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ444P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV444P,
-      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ440P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV440P,
-      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUVJ411P => ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV411P,
-      _ => format,
-    }
-  }
-}
-
-impl Deref for AVCodecParameters {
-  type Target = ffmpeg::AVCodecParameters;
-
-  fn deref(&self) -> &Self::Target {
-    unsafe { &*self.ptr }
-  }
-}
-
-impl DerefMut for AVCodecParameters {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    unsafe { &mut *self.ptr }
   }
 }

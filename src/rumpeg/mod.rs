@@ -13,27 +13,35 @@ pub use avstream::*;
 pub use sws::*;
 
 use crate::{ffmpeg, math::MathError};
-use std::{ffi::CStr, fmt::Display};
+use std::{
+  ffi::{CStr, NulError},
+  fmt::Display,
+  str::FromStr,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RumpegError {
-  #[error("avcodec_alloc_context3 failed")]
+  #[error("Could not allocate AVCodecContext")]
   AVCodecContextAllocFail,
   #[error("{0}: AVError - {2} (Code {1})")]
   AVError(String, i32, String),
-  #[error("avformat_alloc_context failed")]
+  #[error("Could not allocate AVFormatContext")]
   AVFormatContextAllocFail,
-  #[error("av_frame_alloc failed")]
+  #[error("Could not allocate AVFrame")]
   AVFrameCreation,
   #[error("No decoder found")]
   DecoderMissing,
   #[error("Unknown codec, could not determine pixel format (Codec ID: {0})")]
   PixelFormatMissing(i32),
-  #[error("sws_getContext failed")]
-  SWSContextCreation,
+  #[error("Could not create SwsContext")]
+  SwsContextCreation,
   #[error("No video format found")]
   VideoFormatMissing,
+  #[error("Could not create CString: {0}")]
+  CStringCreation(#[from] NulError),
+  #[error("Unknown log level")]
+  UnknownLogLevel,
   #[error(transparent)]
   Math(#[from] MathError),
 }
@@ -56,6 +64,54 @@ pub type RumpegResult<T = ()> = Result<T, RumpegError>;
 
 pub fn version() -> &'static str {
   unsafe { ptr_to_str(ffmpeg::av_version_info()).unwrap_or("N/A") }
+}
+
+#[derive(Debug, Default)]
+pub enum LogLevel {
+  Quiet = ffmpeg::AV_LOG_QUIET as isize,
+  Panic = ffmpeg::AV_LOG_PANIC as isize,
+  Fatal = ffmpeg::AV_LOG_FATAL as isize,
+  Error = ffmpeg::AV_LOG_ERROR as isize,
+  #[default]
+  Warning = ffmpeg::AV_LOG_WARNING as isize,
+  Info = ffmpeg::AV_LOG_INFO as isize,
+  Verbose = ffmpeg::AV_LOG_VERBOSE as isize,
+  Debug = ffmpeg::AV_LOG_DEBUG as isize,
+  Trace = ffmpeg::AV_LOG_TRACE as isize,
+}
+
+impl FromStr for LogLevel {
+  type Err = RumpegError;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    let s = s.to_lowercase();
+    if s == "quiet" {
+      Ok(Self::Quiet)
+    } else if s == "panic" {
+      Ok(Self::Panic)
+    } else if s == "fatal" {
+      Ok(Self::Fatal)
+    } else if s == "error" {
+      Ok(Self::Error)
+    } else if s == "warning" {
+      Ok(Self::Warning)
+    } else if s == "info" {
+      Ok(Self::Info)
+    } else if s == "verbose" {
+      Ok(Self::Verbose)
+    } else if s == "debug" {
+      Ok(Self::Debug)
+    } else if s == "trace" {
+      Ok(Self::Trace)
+    } else {
+      Err(RumpegError::UnknownLogLevel)
+    }
+  }
+}
+
+pub fn set_log_level(level: LogLevel) {
+  unsafe {
+    ffmpeg::av_log_set_level(level as i32);
+  }
 }
 
 pub fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {

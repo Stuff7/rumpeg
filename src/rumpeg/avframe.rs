@@ -1,5 +1,7 @@
 use super::*;
+use crate::ascii::Color;
 use crate::ffmpeg;
+use crate::log;
 use crate::math;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
@@ -150,6 +152,87 @@ impl Drop for AVFrame {
   fn drop(&mut self) {
     unsafe {
       ffmpeg::av_frame_free(&mut self.ptr);
+    }
+  }
+}
+
+#[derive(Debug)]
+pub struct AVFrameIter {
+  format_context: *mut ffmpeg::AVFormatContext,
+  codec_context: *mut ffmpeg::AVCodecContext,
+  stream_index: i32,
+  duration: i64,
+  step: i64,
+  next_timestamp: i64,
+}
+
+impl AVFrameIter {
+  pub fn new(
+    format_context: *mut ffmpeg::AVFormatContext,
+    codec_context: *mut ffmpeg::AVCodecContext,
+    stream_index: i32,
+    duration: i64,
+    step: i64,
+  ) -> Self {
+    Self {
+      format_context,
+      codec_context,
+      stream_index,
+      duration,
+      step,
+      next_timestamp: 0,
+    }
+  }
+}
+
+impl Iterator for AVFrameIter {
+  type Item = AVFrame;
+
+  fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+    let Ok(mut frame) = AVFrame::empty() else {return None};
+    let mut packet = AVPacket::empty();
+
+    loop {
+      if self.next_timestamp >= self.duration {
+        return None;
+      }
+      match packet.read(self.format_context) {
+        Ok(..) => unsafe {
+          if packet.stream_index == self.stream_index {
+            ffmpeg::avcodec_send_packet(self.codec_context, &*packet);
+            let result = ffmpeg::avcodec_receive_frame(self.codec_context, &mut *frame);
+            if result == 0 {
+              self.next_timestamp = frame.pts + self.step;
+              ffmpeg::avcodec_flush_buffers(self.codec_context);
+              ffmpeg::avformat_seek_file(
+                self.format_context,
+                self.stream_index,
+                0,
+                self.next_timestamp,
+                self.next_timestamp,
+                ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
+              );
+              println!("PTS {} NTS {}", frame.pts, self.next_timestamp);
+              return Some(frame);
+            }
+            if result != ffmpeg::AVERROR(ffmpeg::EAGAIN as i32) {
+              log!(err@
+                "{}",
+                RumpegError::from_code(result, "Encountered AVError while receiving frame")
+              );
+              return None;
+            }
+          }
+        },
+        Err(e) => {
+          if let RumpegError::AVError(_, code, _) = e {
+            if code == ffmpeg::AVERROR_EOF {
+              return None;
+            }
+          }
+          log!(err@"Encountered AVError while reading frame {e}");
+        }
+      }
     }
   }
 }

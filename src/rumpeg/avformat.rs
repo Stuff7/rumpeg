@@ -15,7 +15,7 @@ pub struct AVFormatContext {
 
 impl AVFormatContext {
   pub fn new(filepath: &str) -> RumpegResult<Self> {
-    let filename = CString::new(filepath).expect("CString creation failed");
+    let filename = CString::new(filepath)?;
 
     unsafe {
       let mut ptr = ffmpeg::avformat_alloc_context();
@@ -32,48 +32,67 @@ impl AVFormatContext {
 
       if result < 0 {
         ffmpeg::avformat_close_input(&mut ptr);
-        return Err(RumpegError::from_code(result, "avformat_open_input failed"));
+        return Err(RumpegError::from_code(
+          result,
+          "Could not open input stream",
+        ));
       }
 
       let iformat = (*ptr).iformat;
+
       if iformat.is_null() {
         ffmpeg::avformat_close_input(&mut ptr);
         return Err(RumpegError::VideoFormatMissing);
       }
 
-      let result = ffmpeg::avformat_find_stream_info(ptr, ptr::null_mut());
-      if result < 0 {
+      let stream = AVStream::new(ptr).map_err(|e| {
         ffmpeg::avformat_close_input(&mut ptr);
-        return Err(RumpegError::from_code(
-          result,
-          "avformat_find_stream_info failed",
-        ));
-      }
+        e
+      })?;
 
-      Ok(Self {
-        ptr,
-        stream: AVStream::new(ptr)?,
-      })
+      Ok(Self { ptr, stream })
     }
   }
 
   pub fn seek(&self, position: SeekPosition) -> RumpegResult {
     unsafe {
-      let seconds = self.stream.to_time_base(position);
+      let timestamp = self.stream.as_time_base(position);
 
-      match ffmpeg::av_seek_frame(
+      match ffmpeg::avformat_seek_file(
         &mut *self.ptr,
         self.stream.index,
-        seconds,
-        ffmpeg::AVSEEK_FLAG_FRAME as i32,
+        0,
+        timestamp,
+        timestamp,
+        ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
       ) {
         s if s >= 0 => Ok(()),
         e => Err(RumpegError::from_code(
           e,
-          &format!("Failed to seek to {seconds} of {}", self.duration),
+          &format!("Failed to seek to {timestamp} of {}", self.stream.duration),
         )),
       }
     }
+  }
+
+  pub fn frames(
+    &self,
+    codec_context: *mut ffmpeg::AVCodecContext,
+    step: SeekPosition,
+  ) -> AVFrameIter {
+    let min_step = self.stream.as_time_base(SeekPosition::Milliseconds(1200));
+    println!(
+      "AA {step:?} {} {}",
+      self.stream.as_time_base(step),
+      min_step
+    );
+    AVFrameIter::new(
+      self.ptr,
+      codec_context,
+      self.stream.index,
+      self.stream.duration,
+      std::cmp::max(min_step, self.stream.as_time_base(step)),
+    )
   }
 }
 
@@ -131,6 +150,7 @@ impl Deref for AVInputFormat {
 #[derive(Debug, Clone, Copy)]
 pub enum SeekPosition {
   Seconds(i64),
+  Milliseconds(i64),
   Percentage(f64),
   TimeBase(i64),
 }
@@ -142,6 +162,10 @@ impl FromStr for SeekPosition {
       Self::Seconds(s.parse()?)
     } else if let Some(s) = s.strip_suffix('%') {
       Self::Percentage(s.parse::<f64>()? / 100.)
+    } else if let Some(s) = s.strip_suffix("ms") {
+      Self::Milliseconds(s.parse()?)
+    } else if let Some(s) = s.strip_suffix("ts") {
+      Self::TimeBase(s.parse()?)
     } else {
       Self::Seconds(s.parse()?)
     })

@@ -1,26 +1,32 @@
 use std::{env, str::FromStr};
 use thiserror::Error;
 
-use crate::rumpeg::SeekPosition;
+use crate::rumpeg::{LogLevel, SeekPosition};
 
 #[derive(Debug)]
 pub struct CLIArgs {
+  pub atlas: bool,
   pub debug: bool,
   pub filepath: String,
   pub height: i32,
   pub seek_position: SeekPosition,
   pub width: i32,
+  pub log_level: LogLevel,
+  pub step: SeekPosition,
 }
 
 impl CLIArgs {
   pub fn read() -> CLIResult<Self> {
     let args: Vec<String> = env::args().collect();
     Ok(Self {
+      atlas: Self::find_flag(&args, "-a"),
       debug: Self::find_flag(&args, "-d"),
       filepath: args.get(1).ok_or(CLIError::FilepathMissing)?.clone(),
       height: Self::find_arg(&args, "-h"),
       seek_position: Self::find_arg(&args, "-s"),
       width: Self::find_arg(&args, "-w"),
+      log_level: Self::find_arg(&args, "-l"),
+      step: Self::find_arg(&args, "-step"),
     })
   }
 

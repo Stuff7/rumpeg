@@ -10,8 +10,8 @@ use crate::math::Matrix3x3;
 #[derive(Debug)]
 pub struct SwsContext {
   ptr: *mut ffmpeg::SwsContext,
-  input: SWSFrameProperties,
-  output: SWSFrameProperties,
+  input: SwsFrameProperties,
+  output: SwsFrameProperties,
 }
 
 impl SwsContext {
@@ -56,8 +56,8 @@ impl SwsContext {
   #[inline]
   fn get_context_ptr(
     ptr: *mut ffmpeg::SwsContext,
-    input: SWSFrameProperties,
-    output: SWSFrameProperties,
+    input: SwsFrameProperties,
+    output: SwsFrameProperties,
   ) -> RumpegResult<*mut ffmpeg::SwsContext> {
     unsafe {
       let ptr = ffmpeg::sws_getCachedContext(
@@ -75,7 +75,7 @@ impl SwsContext {
       );
 
       if ptr.is_null() {
-        Err(RumpegError::SWSContextCreation)
+        Err(RumpegError::SwsContextCreation)
       } else {
         Ok(ptr)
       }
@@ -104,20 +104,20 @@ impl Drop for SwsContext {
 }
 
 #[derive(Debug)]
-pub struct SWSContextBuilder {
-  input: SWSFrameProperties,
-  output: SWSFrameProperties,
+pub struct SwsContextBuilder {
+  input: SwsFrameProperties,
+  output: SwsFrameProperties,
 }
 
-impl SWSContextBuilder {
-  pub fn from_codecpar(codecpar: AVCodecParameters) -> Self {
+impl SwsContextBuilder {
+  pub fn from_codec_context(codec_context: &AVCodecContext) -> Self {
     Self {
-      input: SWSFrameProperties {
-        width: codecpar.width,
-        height: codecpar.height,
-        pixel_format: codecpar.pixel_format,
+      input: SwsFrameProperties {
+        width: codec_context.width,
+        height: codec_context.height,
+        pixel_format: codec_context.format,
       },
-      output: SWSFrameProperties {
+      output: SwsFrameProperties {
         width: 0,
         height: 0,
         pixel_format: ffmpeg::AVPixelFormat_AV_PIX_FMT_RGB24,
@@ -151,13 +151,13 @@ impl SWSContextBuilder {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SWSFrameProperties {
+pub struct SwsFrameProperties {
   width: i32,
   height: i32,
   pixel_format: i32,
 }
 
-impl SWSFrameProperties {
+impl SwsFrameProperties {
   fn copy_aspect_ratio(&mut self, other: Self) {
     if self.width < 1 {
       self.width = if self.height > 0 {
@@ -176,7 +176,7 @@ impl SWSFrameProperties {
   }
 }
 
-impl Display for SWSFrameProperties {
+impl Display for SwsFrameProperties {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
