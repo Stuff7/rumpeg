@@ -81,11 +81,6 @@ impl AVFormatContext {
     step: SeekPosition,
   ) -> AVFrameIter {
     let min_step = self.stream.as_time_base(SeekPosition::Milliseconds(1200));
-    println!(
-      "AA {step:?} {} {}",
-      self.stream.as_time_base(step),
-      min_step
-    );
     AVFrameIter::new(
       self.ptr,
       codec_context,

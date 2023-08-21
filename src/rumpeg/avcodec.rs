@@ -72,19 +72,6 @@ impl AVCodecContext {
     }
   }
 
-  // pub fn receive_frame(&self) -> RumpegResult<AVFrame> {
-  //   unsafe {
-  //     let mut frame = AVFrame::empty()?;
-  //     match ffmpeg::avcodec_receive_frame(self.ptr, &mut *frame) {
-  //       e if e != 0 => Err(RumpegError::from_code(
-  //         e,
-  //         "Encountered AVError while receiving frame",
-  //       )),
-  //       _ => Ok(frame),
-  //     }
-  //   }
-  // }
-
   pub fn as_ptr(&self) -> *mut ffmpeg::AVCodecContext {
     self.ptr
   }
