@@ -3,8 +3,8 @@ use crate::ascii::RESET;
 use crate::math;
 use crate::rumpeg::*;
 use std::fmt;
-use std::fs::write;
 use thiserror::Error;
+use webp::WebPMemory;
 
 #[derive(Debug)]
 pub struct Video {
@@ -53,49 +53,16 @@ impl Video {
     Ok(self.sws_context.resize_output(width, height)?)
   }
 
-  pub fn get_frame(&mut self, position: SeekPosition, thumbnail_path: &str) -> VideoResult {
-    if let Some(mut frame) = self
-      .frames(position, SeekPosition::default(), SeekPosition::default())?
-      .next()
-    {
-      let image = self
+  pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<WebPMemory> {
+    Ok(
+      self
         .sws_context
-        .transform(&mut frame, self.display_matrix)?
-        .encode_as_webp();
-      write(format!("{thumbnail_path}.webp"), &*image).expect("Failed to save image");
-    }
-
-    Ok(())
+        .transform(frame, self.display_matrix)?
+        .encode_as_webp(),
+    )
   }
 
-  pub fn burst_frames(
-    &mut self,
-    thumbnail_path: &str,
-    start: SeekPosition,
-    end: SeekPosition,
-    step: SeekPosition,
-  ) -> VideoResult {
-    for mut frame in self.frames(start, end, step)? {
-      let image = self
-        .sws_context
-        .transform(&mut frame, self.display_matrix)?
-        .encode_as_webp();
-      write(
-        format!("{thumbnail_path}-{}.webp", self.codec_context.frame_num),
-        &*image,
-      )
-      .expect("Failed to save image");
-    }
-
-    Ok(())
-  }
-
-  fn seek(&self, position: SeekPosition) -> RumpegResult {
-    self.codec_context.flush();
-    self.format_context.seek(position)
-  }
-
-  fn frames(
+  pub fn frames(
     &self,
     start: SeekPosition,
     end: SeekPosition,
@@ -107,6 +74,11 @@ impl Video {
         .format_context
         .frames(self.codec_context.as_ptr(), start, end, step),
     )
+  }
+
+  fn seek(&self, position: SeekPosition) -> RumpegResult {
+    self.codec_context.flush();
+    self.format_context.seek(position)
   }
 }
 
