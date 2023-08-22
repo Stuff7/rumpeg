@@ -12,6 +12,7 @@ pub struct CLIArgs {
   pub seek_position: SeekPosition,
   pub width: i32,
   pub log_level: LogLevel,
+  pub end: SeekPosition,
   pub step: SeekPosition,
 }
 
@@ -26,6 +27,7 @@ impl CLIArgs {
       seek_position: Self::find_arg(&args, "-s"),
       width: Self::find_arg(&args, "-w"),
       log_level: Self::find_arg(&args, "-l"),
+      end: Self::find_arg(&args, "-end"),
       step: Self::find_arg(&args, "-step"),
     })
   }

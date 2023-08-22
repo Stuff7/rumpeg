@@ -66,7 +66,7 @@ pub fn version() -> &'static str {
   unsafe { ptr_to_str(ffmpeg::av_version_info()).unwrap_or("N/A") }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub enum LogLevel {
   Quiet = ffmpeg::AV_LOG_QUIET as isize,
   Panic = ffmpeg::AV_LOG_PANIC as isize,

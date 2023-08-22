@@ -111,6 +111,22 @@ impl AVFrame {
     Ok(dest)
   }
 
+  pub fn receive_packet(
+    &mut self,
+    codec_context: *mut ffmpeg::AVCodecContext,
+  ) -> RumpegResult<bool> {
+    unsafe {
+      match ffmpeg::avcodec_receive_frame(codec_context, self.deref_mut()) {
+        e if e == 0 => Ok(true),
+        e if e != ffmpeg::AVERROR(ffmpeg::EAGAIN as i32) => Err(RumpegError::from_code(
+          e,
+          "Encountered AVError while receiving frame",
+        )),
+        _ => Ok(false),
+      }
+    }
+  }
+
   pub fn encode_as_webp(&self) -> WebPMemory {
     Encoder::from_rgb(self.data(), self.width as u32, self.height as u32).encode(50.)
   }
@@ -161,9 +177,9 @@ pub struct AVFrameIter {
   format_context: *mut ffmpeg::AVFormatContext,
   codec_context: *mut ffmpeg::AVCodecContext,
   stream_index: i32,
-  duration: i64,
   step: i64,
   next_timestamp: i64,
+  end: i64,
 }
 
 impl AVFrameIter {
@@ -172,15 +188,20 @@ impl AVFrameIter {
     codec_context: *mut ffmpeg::AVCodecContext,
     stream_index: i32,
     duration: i64,
+    start: i64,
+    end: i64,
     step: i64,
   ) -> Self {
     Self {
       format_context,
       codec_context,
       stream_index,
-      duration,
       step,
-      next_timestamp: 0,
+      next_timestamp: start,
+      end: match end {
+        0 => duration,
+        n => n,
+      },
     }
   }
 }
@@ -193,35 +214,36 @@ impl Iterator for AVFrameIter {
     let mut packet = AVPacket::empty();
 
     loop {
-      if self.next_timestamp >= self.duration {
+      if self.next_timestamp >= self.end {
         return None;
       }
       match packet.read(self.format_context) {
         Ok(..) => unsafe {
           if packet.stream_index == self.stream_index {
-            ffmpeg::avcodec_send_packet(self.codec_context, &*packet);
-            let result = ffmpeg::avcodec_receive_frame(self.codec_context, &mut *frame);
-            if result == 0 {
-              self.next_timestamp = frame.pts + self.step;
-              ffmpeg::avcodec_flush_buffers(self.codec_context);
-              ffmpeg::avformat_seek_file(
-                self.format_context,
-                self.stream_index,
-                0,
-                self.next_timestamp,
-                self.next_timestamp,
-                ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
-              );
-              println!("PTS {} NTS {}", frame.pts, self.next_timestamp);
-              return Some(frame);
+            if let Err(e) = packet.send(self.codec_context) {
+              println!("{e}");
             }
-            if result != ffmpeg::AVERROR(ffmpeg::EAGAIN as i32) {
-              log!(err@
-                "{}",
-                RumpegError::from_code(result, "Encountered AVError while receiving frame")
-              );
-              return None;
-            }
+            match frame.receive_packet(self.codec_context) {
+              Ok(changed) => {
+                if changed && frame.pts >= self.next_timestamp {
+                  self.next_timestamp = frame.pts + self.step;
+                  ffmpeg::avcodec_flush_buffers(self.codec_context);
+                  ffmpeg::avformat_seek_file(
+                    self.format_context,
+                    self.stream_index,
+                    0,
+                    self.next_timestamp,
+                    self.end,
+                    ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
+                  );
+                  return Some(frame);
+                }
+              }
+              Err(e) => {
+                log!(err@"{e}");
+                return None;
+              }
+            };
           }
         },
         Err(e) => {

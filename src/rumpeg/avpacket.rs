@@ -26,6 +26,15 @@ impl AVPacket {
       }
     }
   }
+
+  pub fn send(&mut self, codec_context: *mut ffmpeg::AVCodecContext) -> RumpegResult {
+    unsafe {
+      match ffmpeg::avcodec_send_packet(codec_context, self.ptr) {
+        e if e < 0 => Err(RumpegError::from_code(e, "Error sending packet")),
+        _ => Ok(()),
+      }
+    }
+  }
 }
 
 impl Deref for AVPacket {

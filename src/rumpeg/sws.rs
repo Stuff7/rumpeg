@@ -24,7 +24,7 @@ impl SwsContext {
   }
 
   pub fn transform(
-    &mut self,
+    &self,
     input: &mut AVFrame,
     transform: Option<Matrix3x3>,
   ) -> RumpegResult<AVFrame> {

@@ -78,15 +78,18 @@ impl AVFormatContext {
   pub fn frames(
     &self,
     codec_context: *mut ffmpeg::AVCodecContext,
+    start: SeekPosition,
+    end: SeekPosition,
     step: SeekPosition,
   ) -> AVFrameIter {
-    let min_step = self.stream.as_time_base(SeekPosition::Milliseconds(1200));
     AVFrameIter::new(
       self.ptr,
       codec_context,
       self.stream.index,
       self.stream.duration,
-      std::cmp::max(min_step, self.stream.as_time_base(step)),
+      self.stream.as_time_base(start),
+      self.stream.as_time_base(end),
+      std::cmp::max(1, self.stream.as_time_base(step)),
     )
   }
 }
@@ -153,14 +156,14 @@ pub enum SeekPosition {
 impl FromStr for SeekPosition {
   type Err = Box<dyn std::error::Error>;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    Ok(if let Some(s) = s.strip_suffix('s') {
-      Self::Seconds(s.parse()?)
+    Ok(if let Some(s) = s.strip_suffix("ms") {
+      Self::Milliseconds(s.parse()?)
     } else if let Some(s) = s.strip_suffix('%') {
       Self::Percentage(s.parse::<f64>()? / 100.)
-    } else if let Some(s) = s.strip_suffix("ms") {
-      Self::Milliseconds(s.parse()?)
     } else if let Some(s) = s.strip_suffix("ts") {
       Self::TimeBase(s.parse()?)
+    } else if let Some(s) = s.strip_suffix('s') {
+      Self::Seconds(s.parse()?)
     } else {
       Self::Seconds(s.parse()?)
     })

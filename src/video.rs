@@ -3,6 +3,7 @@ use crate::ascii::RESET;
 use crate::math;
 use crate::rumpeg::*;
 use std::fmt;
+use std::fs::write;
 use thiserror::Error;
 
 #[derive(Debug)]
@@ -53,14 +54,15 @@ impl Video {
   }
 
   pub fn get_frame(&mut self, position: SeekPosition, thumbnail_path: &str) -> VideoResult {
-    self.seek(position)?;
-
-    if let Some(mut frame) = self.frames().next() {
-      let webp = self
+    if let Some(mut frame) = self
+      .frames(position, SeekPosition::default(), SeekPosition::default())?
+      .next()
+    {
+      let image = self
         .sws_context
         .transform(&mut frame, self.display_matrix)?
         .encode_as_webp();
-      std::fs::write(format!("{thumbnail_path}.webp"), &*webp).expect("Failed to save image");
+      write(format!("{thumbnail_path}.webp"), &*image).expect("Failed to save image");
     }
 
     Ok(())
@@ -68,19 +70,19 @@ impl Video {
 
   pub fn burst_frames(
     &mut self,
-    position: SeekPosition,
     thumbnail_path: &str,
+    start: SeekPosition,
+    end: SeekPosition,
     step: SeekPosition,
   ) -> VideoResult {
-    self.seek(position)?;
-    for mut frame in self.frames_step(step) {
-      let webp = self
+    for mut frame in self.frames(start, end, step)? {
+      let image = self
         .sws_context
         .transform(&mut frame, self.display_matrix)?
         .encode_as_webp();
-      std::fs::write(
+      write(
         format!("{thumbnail_path}-{}.webp", self.codec_context.frame_num),
-        &*webp,
+        &*image,
       )
       .expect("Failed to save image");
     }
@@ -93,16 +95,18 @@ impl Video {
     self.format_context.seek(position)
   }
 
-  fn frames(&self) -> AVFrameIter {
-    self
-      .format_context
-      .frames(self.codec_context.as_ptr(), SeekPosition::default())
-  }
-
-  fn frames_step(&self, step: SeekPosition) -> AVFrameIter {
-    self
-      .format_context
-      .frames(self.codec_context.as_ptr(), step)
+  fn frames(
+    &self,
+    start: SeekPosition,
+    end: SeekPosition,
+    step: SeekPosition,
+  ) -> VideoResult<AVFrameIter> {
+    self.seek(start)?;
+    Ok(
+      self
+        .format_context
+        .frames(self.codec_context.as_ptr(), start, end, step),
+    )
   }
 }
 
@@ -124,6 +128,7 @@ impl fmt::Display for Video {
       - {title}Framerate:{RESET} {:?}\n\
       - {title}Average Framerate:{RESET} {:?}\n\
       - {title}Base Framerate:{RESET} {:?}\n\
+      - {title}GOP Size:{RESET} {}\n\
       - {title}Mime Type:{RESET} {}",
       ptr_to_str(self.format_context.url).unwrap_or("N/A"),
       self
@@ -141,6 +146,7 @@ impl fmt::Display for Video {
       self.codec_context.framerate,
       self.format_context.stream.avg_frame_rate,
       self.format_context.stream.r_frame_rate,
+      self.codec_context.gop_size,
       self.mime_type,
       title = "".rgb(75, 205, 94).bold(),
     )
