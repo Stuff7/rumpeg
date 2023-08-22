@@ -49,7 +49,6 @@ fn main() {
       Ok save_atlas(&video, "temp/image", args.seek_position, args.end, args.step),
       Err "Failed to save atlas"
     );
-  } else {
   }
   unwrap!(Ok save_image(&video, "temp/image", args.seek_position), Err "Failed to save image");
   let end_time = Instant::now();
