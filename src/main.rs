@@ -80,7 +80,7 @@ fn save_image(
     .next()
   {
     let image = video.frame_to_webp(&mut frame)?;
-    write(format!("{thumbnail_path}.webp"), &*image).expect("Failed to save image");
+    write(format!("{thumbnail_path}.webp"), &*image)?;
   }
 
   Ok(())

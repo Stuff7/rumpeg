@@ -60,6 +60,14 @@ impl SwsContext {
     output: SwsFrameProperties,
   ) -> RumpegResult<*mut ffmpeg::SwsContext> {
     unsafe {
+      let mut flags = ffmpeg::SWS_SINC as i32;
+
+      // workaround for "right band" issue
+      // https://ffmpeg.org/pipermail/libav-user/2012-July/002451.html
+      if (input.width & 0x7 != 0) || (input.height & 0x7 != 0) {
+        flags |= ffmpeg::SWS_ACCURATE_RND as i32
+      }
+
       let ptr = ffmpeg::sws_getCachedContext(
         ptr,
         input.width,
@@ -68,7 +76,7 @@ impl SwsContext {
         output.width,
         output.height,
         output.pixel_format,
-        ffmpeg::SWS_SINC as i32,
+        flags,
         ptr::null_mut(),
         ptr::null_mut(),
         ptr::null_mut(),
