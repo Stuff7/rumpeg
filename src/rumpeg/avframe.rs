@@ -210,13 +210,14 @@ impl Iterator for AVFrameIter {
   type Item = AVFrame;
 
   fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+    if self.next_timestamp >= self.end {
+      return None;
+    }
+
     let Ok(mut frame) = AVFrame::empty() else {return None};
     let mut packet = AVPacket::empty();
 
     loop {
-      if self.next_timestamp >= self.end {
-        return None;
-      }
       match packet.read(self.format_context) {
         Ok(..) => unsafe {
           if packet.stream_index == self.stream_index {
