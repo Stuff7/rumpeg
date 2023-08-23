@@ -4,7 +4,6 @@ use crate::math;
 use crate::rumpeg::*;
 use std::fmt;
 use thiserror::Error;
-use webp::WebPMemory;
 
 const MAX_FILM_WIDTH: i32 = 10;
 const FILM_FRAME_W: i32 = 16;
@@ -60,12 +59,12 @@ impl Video {
     Ok(self.sws_context.resize_output(width, height)?)
   }
 
-  pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<WebPMemory> {
+  pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<Vec<u8>> {
     Ok(
       self
         .sws_context
         .transform(frame, self.display_matrix)?
-        .encode_as_webp(),
+        .encode_as_webp()?,
     )
   }
 

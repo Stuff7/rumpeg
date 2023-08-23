@@ -3,38 +3,40 @@ use std::{env, fs};
 
 fn main() {
   load_env();
+  load_lib("ffmpeg", &["avcodec", "avformat", "avutil", "swscale"]);
+  load_lib("libwebp", &["libwebp"]);
+}
 
+fn load_lib(name: &str, libs: &[&str]) {
+  let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not found"));
+  let lib_dir = name.to_uppercase();
+  let lib_dir =
+    PathBuf::from(env::var(&lib_dir).unwrap_or_else(|e| panic!("{lib_dir} env missing {e}")));
   println!(
     "cargo:rustc-link-search={}",
-    env::var("FFMPEG_LIB").expect("FFMPEG_LIB env missing")
+    lib_dir.join("lib").to_str().unwrap()
   );
 
-  println!("cargo:rustc-link-lib=avcodec");
-  println!("cargo:rustc-link-lib=avformat");
-  println!("cargo:rustc-link-lib=avutil");
-  println!("cargo:rustc-link-lib=swscale");
+  for lib in libs {
+    println!("cargo:rustc-link-lib={lib}");
+  }
 
-  println!("cargo:rerun-if-changed=wrapper.h");
+  let headers = format!("{name}.h");
+  println!("cargo:rerun-if-changed={headers}");
   println!("cargo:rerun-if-changed=.env");
 
   let bindings = bindgen::Builder::default()
-    .header("wrapper.h")
-    .clang_arg(format!(
-      "-I{}",
-      env::var("FFMPEG_INC").expect("FFMPEG_INC env missing")
-    ))
+    .header(headers)
+    .clang_arg(format!("-I{}", lib_dir.join("include").to_str().unwrap()))
     // Tell cargo to invalidate the built crate whenever any of the
     // included header files changed.
     .parse_callbacks(Box::new(bindgen::CargoCallbacks))
     .generate()
     .expect("Unable to generate bindings");
 
-  let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("ffmpeg.rs");
-  let bindings = bindings.to_string();
-
-  if let Err(err) = fs::write(out_path, bindings) {
-    println!("Error writing to file: {}", err);
-  }
+  bindings
+    .write_to_file(out_dir.join(format!("{name}.rs")))
+    .unwrap_or_else(|e| panic!("Unable to write {name} bindings {e}"));
 }
 
 fn load_env() {
@@ -47,12 +49,5 @@ fn load_env() {
         env::set_var(key, value);
       }
     }
-  }
-
-  // Now you can access the environment variables as before
-  if let Ok(value) = env::var("MY_VARIABLE") {
-    println!("Value of MY_VARIABLE: {}", value);
-  } else {
-    println!("MY_VARIABLE is not set.");
   }
 }

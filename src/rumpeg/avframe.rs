@@ -3,10 +3,10 @@ use crate::ascii::Color;
 use crate::ffmpeg;
 use crate::log;
 use crate::math;
+use crate::webp;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::slice;
-use webp::{Encoder, WebPMemory};
 
 const COLOR_CHANNELS: usize = 3;
 
@@ -123,8 +123,8 @@ impl AVFrame {
     }
   }
 
-  pub fn encode_as_webp(&self) -> WebPMemory {
-    Encoder::from_rgb(self.data(), self.width as u32, self.height as u32).encode(50.)
+  pub fn encode_as_webp(&self) -> RumpegResult<Vec<u8>> {
+    Ok(webp::encode_frame_as_webp(self, 50.)?)
   }
 
   pub fn data(&self) -> &[u8] {

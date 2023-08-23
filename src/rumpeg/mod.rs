@@ -12,7 +12,7 @@ pub use avpacket::*;
 pub use avstream::*;
 pub use sws::*;
 
-use crate::{ffmpeg, math::MathError};
+use crate::{ffmpeg, math::MathError, webp::WebPError};
 use std::{
   ffi::{CStr, NulError},
   fmt::Display,
@@ -32,6 +32,8 @@ pub enum RumpegError {
   AVFrameCreation,
   #[error("No decoder found")]
   DecoderMissing,
+  #[error("Frame encoding failed {0}")]
+  Encoding(#[from] WebPError),
   #[error("Unknown codec, could not determine pixel format (Codec ID: {0})")]
   PixelFormatMissing(i32),
   #[error("Could not create SwsContext")]

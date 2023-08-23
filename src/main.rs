@@ -4,6 +4,7 @@ mod ffmpeg;
 mod math;
 mod rumpeg;
 mod video;
+mod webp;
 
 use ascii::Color;
 use rumpeg::*;
@@ -64,7 +65,7 @@ fn save_film_roll(
 ) -> Result<(), Box<dyn std::error::Error>> {
   write(
     format!("{thumbnail_path}-film.webp"),
-    &*video.film_roll(start, end, step)?.encode_as_webp(),
+    video.film_roll(start, end, step)?.encode_as_webp()?,
   )?;
 
   Ok(())
@@ -84,7 +85,7 @@ fn save_image(
     .next()
   {
     let image = video.frame_to_webp(&mut frame)?;
-    write(format!("{thumbnail_path}.webp"), &*image)?;
+    write(format!("{thumbnail_path}.webp"), image)?;
   }
 
   Ok(())
