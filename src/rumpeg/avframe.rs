@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut};
 use std::slice;
 use webp::{Encoder, WebPMemory};
 
-const PX_BYTES: usize = 3;
+const COLOR_CHANNELS: usize = 3;
 
 #[derive(Debug)]
 pub struct AVFrame {
@@ -79,29 +79,29 @@ impl AVFrame {
     } else {
       (self.width, self.height)
     };
+
     let mut dest = Self::new(self.format, dst_width, dst_height)?;
     let dst_data = dest.data_mut();
 
     let [a, b, u, c, d, v, x, y, w] = *transform;
+
     let x = if x != 0 { dst_width - 1 } else { x };
     let y = if y != 0 { dst_height - 1 } else { y };
 
-    for i in 0..src_data.len() {
-      let (p, q) = ((i % src_width) as i32, (i / src_width) as i32);
+    for i in 0..src_data.len() / COLOR_CHANNELS {
+      let p = (i % src_width) as i32;
+      let q = (i / src_width) as i32;
 
       let z = u * p + v * q + w;
       let dp = (a * p + c * q + x) / z;
       let dq = (b * p + d * q + y) / z;
-      let di = (dp + dst_width * dq) * PX_BYTES as i32;
+      let di = dp + dst_width * dq;
 
-      let di = di as usize;
-      if di < dst_data.len() {
-        for color_idx in 0..PX_BYTES {
-          if i * PX_BYTES + color_idx < src_data.len() {
-            dst_data[di + color_idx] = src_data[i * PX_BYTES + color_idx];
-          }
-        }
-      }
+      let src_idx = i * COLOR_CHANNELS;
+      let dst_idx = di as usize * COLOR_CHANNELS;
+
+      dst_data[dst_idx..(COLOR_CHANNELS + dst_idx)]
+        .copy_from_slice(&src_data[src_idx..(COLOR_CHANNELS + src_idx)]);
     }
 
     Ok(dest)
@@ -176,6 +176,7 @@ pub struct AVFrameIter {
   step: i64,
   next_timestamp: i64,
   end: i64,
+  seek_to_step: bool,
 }
 
 impl AVFrameIter {
@@ -186,6 +187,7 @@ impl AVFrameIter {
     start: i64,
     end: i64,
     step: i64,
+    seek_to_step: bool,
   ) -> Self {
     Self {
       format_context,
@@ -194,6 +196,7 @@ impl AVFrameIter {
       step,
       next_timestamp: start,
       end,
+      seek_to_step,
     }
   }
 }
@@ -220,15 +223,17 @@ impl Iterator for AVFrameIter {
               Ok(changed) => {
                 if changed && frame.pts >= self.next_timestamp {
                   self.next_timestamp = frame.pts + self.step;
-                  ffmpeg::avcodec_flush_buffers(self.codec_context);
-                  ffmpeg::avformat_seek_file(
-                    self.format_context,
-                    self.stream_index,
-                    0,
-                    self.next_timestamp,
-                    self.end,
-                    ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
-                  );
+                  if self.seek_to_step {
+                    ffmpeg::avcodec_flush_buffers(self.codec_context);
+                    ffmpeg::avformat_seek_file(
+                      self.format_context,
+                      self.stream_index,
+                      0,
+                      self.next_timestamp,
+                      self.end,
+                      ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
+                    );
+                  }
                   return Some(frame);
                 }
               }

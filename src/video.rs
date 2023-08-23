@@ -9,6 +9,7 @@ use webp::WebPMemory;
 const MAX_FILM_WIDTH: i32 = 10;
 const FILM_FRAME_W: i32 = 16;
 const FILM_FRAME_H: i32 = 9;
+const COLOR_CHANNELS: i32 = 3;
 
 #[derive(Debug)]
 pub struct Video {
@@ -86,8 +87,14 @@ impl Video {
     }
 
     let (tile_h, tile_w) = {
-      let w = self.sws_context.width();
-      let h = self.sws_context.height();
+      let mut w = self.sws_context.width();
+      let mut h = self.sws_context.height();
+      if self
+        .display_matrix
+        .is_some_and(|m| m.rotation().abs() == 90.)
+      {
+        std::mem::swap(&mut w, &mut h);
+      }
       if h > w {
         (h, h * FILM_FRAME_W / FILM_FRAME_H)
       } else {
@@ -109,29 +116,24 @@ impl Video {
         .sws_context
         .transform(&mut frame, self.display_matrix)?;
 
-      // Center frame within film frame.
-      let blank_width_offset = (tile_w - frame.width) / 2;
-      let blank_height_offset = (tile_h - frame.height) / 2;
-      let frame_area = frame.width * frame.height;
       let tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
       let tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
-      let tile_x_offset = tile_x * tile_w + blank_width_offset;
-      let tile_y_offset = tile_y * tile_h + blank_height_offset;
-      let frame_data = frame.data();
+      let tile_x_offset = tile_x * tile_w + (tile_w - frame.width) / 2;
+      let tile_y_offset = tile_y * tile_h + (tile_h - frame.height) / 2;
 
-      for i in 0..frame_area {
-        let x = i % frame.width;
-        let y = i / frame.width;
+      let film_data_start = (tile_x_offset + film_width * tile_y_offset) * COLOR_CHANNELS;
 
-        let dx = tile_x_offset + x;
-        let dy = tile_y_offset + y;
-        let di = (dx + film_width * dy) * 3;
+      for y in 0..frame.height {
+        let film_row_start = (film_data_start + film_width * y * COLOR_CHANNELS) as usize;
+        let frame_row_start = (y * frame.width * COLOR_CHANNELS) as usize;
 
-        for color_i in 0..3 {
-          film_data[(di + color_i) as usize] = frame_data[(i * 3 + color_i) as usize];
-        }
+        film_data[film_row_start..film_row_start + (frame.width * COLOR_CHANNELS) as usize]
+          .copy_from_slice(
+            &frame.data()[frame_row_start..frame_row_start + frame.width as usize * 3],
+          );
       }
     }
+
     Ok(film_roll)
   }
 

@@ -82,13 +82,15 @@ impl AVFormatContext {
     end: SeekPosition,
     step: SeekPosition,
   ) -> AVFrameIter {
+    let step = std::cmp::max(1, self.stream.as_time_base(step));
     AVFrameIter::new(
       self.ptr,
       codec_context,
       self.stream.index,
       self.stream.as_time_base(start),
       self.stream.as_time_base(end),
-      std::cmp::max(1, self.stream.as_time_base(step)),
+      step,
+      step > self.stream.as_time_base(SeekPosition::Seconds(2)),
     )
   }
 }
