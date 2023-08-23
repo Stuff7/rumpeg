@@ -86,7 +86,6 @@ impl AVFormatContext {
       self.ptr,
       codec_context,
       self.stream.index,
-      self.stream.duration,
       self.stream.as_time_base(start),
       self.stream.as_time_base(end),
       std::cmp::max(1, self.stream.as_time_base(step)),

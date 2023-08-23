@@ -6,6 +6,10 @@ use std::fmt;
 use thiserror::Error;
 use webp::WebPMemory;
 
+const MAX_FILM_WIDTH: i32 = 10;
+const FILM_FRAME_W: i32 = 16;
+const FILM_FRAME_H: i32 = 9;
+
 #[derive(Debug)]
 pub struct Video {
   pub duration_us: u64,
@@ -24,6 +28,8 @@ pub struct Video {
 pub enum VideoError {
   #[error(transparent)]
   Rumpeg(#[from] RumpegError),
+  #[error("At least 1 frame is needed to create a film roll, found {0}")]
+  NoFramesInFilmRoll(i32),
 }
 
 type VideoResult<T = ()> = Result<T, VideoError>;
@@ -60,6 +66,73 @@ impl Video {
         .transform(frame, self.display_matrix)?
         .encode_as_webp(),
     )
+  }
+
+  pub fn film_roll(
+    &self,
+    start: SeekPosition,
+    end: SeekPosition,
+    step: SeekPosition,
+  ) -> VideoResult<AVFrame> {
+    let tile_count = {
+      let start = self.format_context.stream.as_time_base(start);
+      let end = self.format_context.stream.as_time_base(end);
+      let step = self.format_context.stream.as_time_base(step);
+      ((end - start) as f64 / step as f64).ceil() as i32
+    };
+
+    if tile_count < 1 {
+      return Err(VideoError::NoFramesInFilmRoll(tile_count));
+    }
+
+    let (tile_h, tile_w) = {
+      let w = self.sws_context.width();
+      let h = self.sws_context.height();
+      if h > w {
+        (h, h * FILM_FRAME_W / FILM_FRAME_H)
+      } else {
+        (w * FILM_FRAME_H / FILM_FRAME_W, w)
+      }
+    };
+
+    let mut film_roll = AVFrame::new(
+      crate::ffmpeg::AVPixelFormat_AV_PIX_FMT_RGB24,
+      tile_w * std::cmp::min(tile_count, MAX_FILM_WIDTH),
+      tile_h * (tile_count as f64 / MAX_FILM_WIDTH as f64).ceil() as i32,
+    )?;
+
+    let film_width = film_roll.width;
+    let film_data = film_roll.data_mut();
+
+    for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
+      frame = self
+        .sws_context
+        .transform(&mut frame, self.display_matrix)?;
+
+      // Center frame within film frame.
+      let blank_width_offset = (tile_w - frame.width) / 2;
+      let blank_height_offset = (tile_h - frame.height) / 2;
+      let frame_area = frame.width * frame.height;
+      let tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
+      let tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
+      let tile_x_offset = tile_x * tile_w + blank_width_offset;
+      let tile_y_offset = tile_y * tile_h + blank_height_offset;
+      let frame_data = frame.data();
+
+      for i in 0..frame_area {
+        let x = i % frame.width;
+        let y = i / frame.width;
+
+        let dx = tile_x_offset + x;
+        let dy = tile_y_offset + y;
+        let di = (dx + film_width * dy) * 3;
+
+        for color_i in 0..3 {
+          film_data[(di + color_i) as usize] = frame_data[(i * 3 + color_i) as usize];
+        }
+      }
+    }
+    Ok(film_roll)
   }
 
   pub fn frames(

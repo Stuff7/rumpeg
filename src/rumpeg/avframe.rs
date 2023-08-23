@@ -94,10 +94,6 @@ impl AVFrame {
       let dq = (b * p + d * q + y) / z;
       let di = (dp + dst_width * dq) * PX_BYTES as i32;
 
-      if di < 0 {
-        continue;
-      }
-
       let di = di as usize;
       if di < dst_data.len() {
         for color_idx in 0..PX_BYTES {
@@ -187,7 +183,6 @@ impl AVFrameIter {
     format_context: *mut ffmpeg::AVFormatContext,
     codec_context: *mut ffmpeg::AVCodecContext,
     stream_index: i32,
-    duration: i64,
     start: i64,
     end: i64,
     step: i64,
@@ -198,10 +193,7 @@ impl AVFrameIter {
       stream_index,
       step,
       next_timestamp: start,
-      end: match end {
-        0 => duration,
-        n => n,
-      },
+      end,
     }
   }
 }

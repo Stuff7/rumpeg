@@ -23,6 +23,14 @@ impl SwsContext {
     Ok(())
   }
 
+  pub fn width(&self) -> i32 {
+    self.output.width
+  }
+
+  pub fn height(&self) -> i32 {
+    self.output.height
+  }
+
   pub fn transform(
     &self,
     input: &mut AVFrame,
