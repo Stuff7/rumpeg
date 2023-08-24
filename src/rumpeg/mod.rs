@@ -30,22 +30,22 @@ pub enum RumpegError {
   AVFormatContextAllocFail,
   #[error("Could not allocate AVFrame")]
   AVFrameCreation,
+  #[error("Could not create CString\n{0}")]
+  CStringCreation(#[from] NulError),
   #[error("No decoder found")]
   DecoderMissing,
-  #[error("Frame encoding failed {0}")]
-  Encoding(#[from] WebPError),
-  #[error("Unknown codec, could not determine pixel format (Codec ID: {0})")]
+  #[error(transparent)]
+  Math(#[from] MathError),
+  #[error("Unknown codec, could not determine pixel format (Codec ID {0})")]
   PixelFormatMissing(i32),
   #[error("Could not create SwsContext")]
   SwsContextCreation,
-  #[error("No video format found")]
-  VideoFormatMissing,
-  #[error("Could not create CString: {0}")]
-  CStringCreation(#[from] NulError),
   #[error("Unknown log level")]
   UnknownLogLevel,
+  #[error("No video format found")]
+  VideoFormatMissing,
   #[error(transparent)]
-  Math(#[from] MathError),
+  WebPError(#[from] WebPError),
 }
 
 impl RumpegError {

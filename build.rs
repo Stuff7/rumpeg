@@ -28,6 +28,10 @@ fn load_lib(name: &str, libs: &[&str]) {
   let bindings = bindgen::Builder::default()
     .header(headers)
     .clang_arg(format!("-I{}", lib_dir.join("include").to_str().unwrap()))
+    .clang_arg("-fretain-comments-from-system-headers")
+    .clang_arg("-fparse-all-comments")
+    .generate_comments(true)
+    .derive_default(true)
     // Tell cargo to invalidate the built crate whenever any of the
     // included header files changed.
     .parse_callbacks(Box::new(bindgen::CargoCallbacks))

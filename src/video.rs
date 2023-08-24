@@ -59,7 +59,7 @@ impl Video {
     Ok(self.sws_context.resize_output(width, height)?)
   }
 
-  pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<Vec<u8>> {
+  pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<&[u8]> {
     Ok(
       self
         .sws_context

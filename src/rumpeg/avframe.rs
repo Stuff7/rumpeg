@@ -123,7 +123,7 @@ impl AVFrame {
     }
   }
 
-  pub fn encode_as_webp(&self) -> RumpegResult<Vec<u8>> {
+  pub fn encode_as_webp<'a>(&self) -> RumpegResult<&'a [u8]> {
     Ok(webp::encode_frame_as_webp(self, 50.)?)
   }
 

@@ -17,7 +17,7 @@ macro_rules! unwrap {
     match $wrapped {
       Some(v) => v,
       None => {
-        log!(ln err@$( $err ),*);
+        log!(err@$( $err ),*);
         println!();
         return;
       }
@@ -28,7 +28,7 @@ macro_rules! unwrap {
       Ok(v) => v,
       Err(e) => {
         log!(err@$( $err ),*);
-        log!(": {e}\n");
+        log!("\n{e}\n");
         return;
       }
     }
@@ -36,7 +36,7 @@ macro_rules! unwrap {
 }
 
 fn main() {
-  log!(success@"FFMPEG VERSION: {}\n", rumpeg::version());
+  log!(success@"Using Ffmpeg v{} and libwebp v{}\n", rumpeg::version(), webp::version());
   let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
   rumpeg::set_log_level(args.log_level);
   let mut video = unwrap!(Ok Video::open(&args.filepath), Err "Failed to open video");

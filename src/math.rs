@@ -10,7 +10,7 @@ use crate::ffmpeg;
 
 #[derive(Error, Debug)]
 pub enum MathError {
-  #[error("Failed to parse display matrix: {0}")]
+  #[error("Failed to parse display matrix\n{0}")]
   DisplayMatrixParsingFail(#[from] TryFromSliceError),
   #[error("Packet side data size invalid {0:?}")]
   InvalidSideDataSize(ffmpeg::AVPacketSideData),
