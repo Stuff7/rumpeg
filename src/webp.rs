@@ -80,53 +80,6 @@ mod libwebp {
 use crate::rumpeg::AVFrame;
 use thiserror::Error;
 
-pub fn encode_frame_as_webp<'a>(frame: &AVFrame, quality: f32) -> WebPResult<&'a [u8]> {
-  unsafe {
-    let mut config = libwebp::WebPConfig::default();
-    if libwebp::WebPConfigInit(&mut config) == 0 {
-      return Err(WebPError::WebPConfigInit);
-    }
-
-    config.quality = quality;
-
-    let mut pic = libwebp::WebPPicture::default();
-    if libwebp::WebPPictureInit(&mut pic) == 0 {
-      return Err(WebPError::from_code(pic.error_code));
-    }
-
-    pic.width = frame.width;
-    pic.height = frame.height;
-
-    if libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]) == 0 {
-      libwebp::WebPPictureFree(&mut pic);
-      return Err(WebPError::from_code(pic.error_code));
-    }
-
-    let mut writer = libwebp::WebPMemoryWriter::default();
-    libwebp::WebPMemoryWriterInit(&mut writer);
-    pic.writer = Some(libwebp::WebPMemoryWrite);
-    pic.custom_ptr = &mut writer as *mut _ as *mut std::ffi::c_void;
-
-    let encode_result = libwebp::WebPEncode(&config, &mut pic);
-
-    libwebp::WebPPictureFree(&mut pic);
-
-    if encode_result == 0 {
-      return Err(WebPError::from_code(pic.error_code));
-    }
-
-    Ok(std::slice::from_raw_parts(writer.mem, writer.size))
-  }
-}
-
-pub fn version() -> String {
-  let version = unsafe { libwebp::WebPGetEncoderVersion() };
-  let major = ((version >> 16) & 0xFF) as u8;
-  let minor = ((version >> 8) & 0xFF) as u8;
-  let revision = (version & 0xFF) as u8;
-  format!("{}.{}.{}", major, minor, revision)
-}
-
 #[derive(Debug, Error)]
 pub enum WebPError {
   #[error("Webp encoding failed (Code {0}): {1}")]
@@ -142,3 +95,68 @@ impl WebPError {
 }
 
 type WebPResult<T = ()> = Result<T, WebPError>;
+
+pub struct WebPEncoder {
+  pic: libwebp::WebPPicture,
+  config: libwebp::WebPConfig,
+}
+
+impl WebPEncoder {
+  pub fn new(frame: &AVFrame, quality: f32) -> WebPResult<Self> {
+    unsafe {
+      let mut config = libwebp::WebPConfig::default();
+      if libwebp::WebPConfigInit(&mut config) == 0 {
+        return Err(WebPError::WebPConfigInit);
+      }
+
+      config.quality = quality;
+
+      let mut pic = libwebp::WebPPicture::default();
+      if libwebp::WebPPictureInit(&mut pic) == 0 {
+        return Err(WebPError::from_code(pic.error_code));
+      }
+
+      pic.width = frame.width;
+      pic.height = frame.height;
+
+      if libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]) == 0 {
+        libwebp::WebPPictureFree(&mut pic);
+        return Err(WebPError::from_code(pic.error_code));
+      }
+
+      Ok(Self { pic, config })
+    }
+  }
+
+  pub fn encode<'a>(&mut self) -> WebPResult<&'a [u8]> {
+    unsafe {
+      let mut writer = libwebp::WebPMemoryWriter::default();
+      libwebp::WebPMemoryWriterInit(&mut writer);
+      self.pic.writer = Some(libwebp::WebPMemoryWrite);
+      self.pic.custom_ptr = &mut writer as *mut _ as *mut std::ffi::c_void;
+      let encode_result = libwebp::WebPEncode(&self.config, &mut self.pic);
+
+      if encode_result == 0 {
+        return Err(WebPError::from_code(self.pic.error_code));
+      }
+
+      Ok(std::slice::from_raw_parts(writer.mem, writer.size))
+    }
+  }
+}
+
+impl Drop for WebPEncoder {
+  fn drop(&mut self) {
+    unsafe {
+      libwebp::WebPPictureFree(&mut self.pic);
+    }
+  }
+}
+
+pub fn version() -> String {
+  let version = unsafe { libwebp::WebPGetEncoderVersion() };
+  let major = ((version >> 16) & 0xFF) as u8;
+  let minor = ((version >> 8) & 0xFF) as u8;
+  let revision = (version & 0xFF) as u8;
+  format!("{}.{}.{}", major, minor, revision)
+}

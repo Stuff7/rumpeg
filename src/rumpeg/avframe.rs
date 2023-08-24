@@ -3,7 +3,7 @@ use crate::ascii::Color;
 use crate::ffmpeg;
 use crate::log;
 use crate::math;
-use crate::webp;
+use crate::webp::WebPEncoder;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::slice;
@@ -124,7 +124,7 @@ impl AVFrame {
   }
 
   pub fn encode_as_webp<'a>(&self) -> RumpegResult<&'a [u8]> {
-    Ok(webp::encode_frame_as_webp(self, 50.)?)
+    Ok(WebPEncoder::new(self, 50.)?.encode()?)
   }
 
   pub fn data(&self) -> &[u8] {
