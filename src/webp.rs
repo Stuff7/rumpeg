@@ -97,12 +97,10 @@ pub fn encode_frame_as_webp<'a>(frame: &AVFrame, quality: f32) -> WebPResult<&'a
     pic.width = frame.width;
     pic.height = frame.height;
 
-    if libwebp::WebPPictureAlloc(&mut pic) == 0 {
+    if libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]) == 0 {
       libwebp::WebPPictureFree(&mut pic);
       return Err(WebPError::from_code(pic.error_code));
     }
-
-    libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]);
 
     let mut writer = libwebp::WebPMemoryWriter::default();
     libwebp::WebPMemoryWriterInit(&mut writer);
