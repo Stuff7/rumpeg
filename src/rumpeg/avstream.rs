@@ -47,8 +47,8 @@ impl AVStream {
           ffmpeg::av_rescale_q(n, ffmpeg::AVRational { num: 1, den: 1000 }, self.time_base)
         }
         SeekPosition::Percentage(n) => {
-          let n = (self.duration as f64 * n) as i64;
-          n - n % (self.time_base.den / self.r_frame_rate.num) as i64
+          let n = self.duration as f64 * n;
+          (n - n % (self.time_base.den as f64 / self.r_frame_rate.num as f64)) as i64
         }
         SeekPosition::TimeBase(n) => n,
       }
