@@ -2,6 +2,7 @@ mod avcodec;
 mod avformat;
 mod avframe;
 mod avpacket;
+mod avpixel;
 mod avstream;
 mod sws;
 
@@ -9,6 +10,7 @@ pub use avcodec::*;
 pub use avformat::*;
 pub use avframe::*;
 pub use avpacket::*;
+pub use avpixel::*;
 pub use avstream::*;
 pub use sws::*;
 

@@ -1,3 +1,4 @@
+use super::avpixel::AVPixelFormatMethods;
 use super::*;
 use crate::ascii::Color;
 use crate::ffmpeg;
@@ -7,8 +8,6 @@ use crate::webp::WebPEncoder;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::slice;
-
-const COLOR_CHANNELS: usize = 3;
 
 #[derive(Debug)]
 pub struct AVFrame {
@@ -70,9 +69,6 @@ impl AVFrame {
   ///
   /// *Reference: [ffmpeg docs](https://ffmpeg.org/doxygen/trunk/group__lavu__video__display.html)*
   pub fn transform(&self, transform: math::Matrix3x3) -> RumpegResult<Self> {
-    let src_width = self.width as usize;
-    let src_data = self.data();
-
     let rotation = transform.rotation();
     let (dst_width, dst_height) = if rotation.abs() == 90. {
       (self.height, self.width)
@@ -81,29 +77,33 @@ impl AVFrame {
     };
 
     let mut dest = Self::new(self.format, dst_width, dst_height)?;
-    let dst_data = dest.data_mut();
 
     let [a, b, u, c, d, v, x, y, w] = *transform;
 
-    let x = if x != 0 { dst_width - 1 } else { x };
-    let y = if y != 0 { dst_height - 1 } else { y };
+    for plane in 0..3 {
+      let src_stride = self.linesize[plane];
+      let dst_stride = dest.linesize[plane];
+      let dst_height = dest.plane_height(plane);
 
-    for i in 0..src_data.len() / COLOR_CHANNELS {
-      let p = (i % src_width) as i32;
-      let q = (i / src_width) as i32;
+      let x = if x != 0 { dst_stride - 1 } else { x };
+      let y = if y != 0 { dst_height - 1 } else { y };
 
-      let z = u * p + v * q + w;
-      let dp = (a * p + c * q + x) / z;
-      let dq = (b * p + d * q + y) / z;
-      let di = dp + dst_width * dq;
+      let src_data = self.data(plane);
+      let dst_data = dest.data_mut(plane);
 
-      let src_idx = i * COLOR_CHANNELS;
-      let dst_idx = di as usize * COLOR_CHANNELS;
+      #[allow(clippy::needless_range_loop)]
+      for i in 0..src_data.len() {
+        let p = i as i32 % src_stride;
+        let q = i as i32 / src_stride;
 
-      dst_data[dst_idx..(COLOR_CHANNELS + dst_idx)]
-        .copy_from_slice(&src_data[src_idx..(COLOR_CHANNELS + src_idx)]);
+        let z = u * p + v * q + w;
+        let dp = (a * p + c * q + x) / z;
+        let dq = (b * p + d * q + y) / z;
+        let di = (dp + dst_stride * dq) as usize;
+
+        dst_data[di] = src_data[i];
+      }
     }
-
     Ok(dest)
   }
 
@@ -127,22 +127,29 @@ impl AVFrame {
     Ok(WebPEncoder::new(self, 50.)?.encode()?)
   }
 
-  pub fn data(&self) -> &[u8] {
-    unsafe {
-      slice::from_raw_parts(
-        self.data[0],
-        self.linesize[0] as usize * self.height as usize,
-      )
+  pub fn plane_height(&self, plane: usize) -> i32 {
+    if plane != 1 && plane != 2 {
+      return self.height; // It's either luma (Y) or RGB plane
+    }
+
+    if let Some(desc) = self.format.av_pix_fmt_descriptor() {
+      let s = desc.log2_chroma_h;
+      (self.height + (1 << s) - 1) >> s
+    } else {
+      self.height
     }
   }
 
-  pub fn data_mut(&mut self) -> &mut [u8] {
-    unsafe {
-      slice::from_raw_parts_mut(
-        self.data[0],
-        self.linesize[0] as usize * self.height as usize,
-      )
-    }
+  pub fn size(&self, plane: usize) -> usize {
+    (self.linesize[plane] * self.plane_height(plane)) as usize
+  }
+
+  pub fn data(&self, plane: usize) -> &[u8] {
+    unsafe { slice::from_raw_parts(self.data[plane], self.size(plane)) }
+  }
+
+  pub fn data_mut(&mut self, plane: usize) -> &mut [u8] {
+    unsafe { slice::from_raw_parts_mut(self.data[plane], self.size(plane)) }
   }
 }
 

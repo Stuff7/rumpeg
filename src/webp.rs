@@ -77,7 +77,9 @@ mod libwebp {
   }
 }
 
+use crate::ffmpeg;
 use crate::rumpeg::AVFrame;
+use crate::rumpeg::AVPixelFormatMethods;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -86,11 +88,17 @@ pub enum WebPError {
   Encoding(i32, String),
   #[error("Webp config initialization failed")]
   WebPConfigInit,
+  #[error("Format \"{0}\" is not supported")]
+  FormatNotSupported(&'static str),
 }
 
 impl WebPError {
   pub fn from_code(error_code: i32) -> Self {
     Self::Encoding(error_code, libwebp::webp_error(error_code).into())
+  }
+
+  pub fn from_format(format: ffmpeg::AVPixelFormat) -> Self {
+    Self::FormatNotSupported(format.av_pix_fmt_name())
   }
 }
 
@@ -119,9 +127,25 @@ impl WebPEncoder {
       pic.width = frame.width;
       pic.height = frame.height;
 
-      if libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]) == 0 {
-        libwebp::WebPPictureFree(&mut pic);
-        return Err(WebPError::from_code(pic.error_code));
+      match frame.format {
+        ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P => {
+          if libwebp::WebPPictureAlloc(&mut pic) == 0 {
+            libwebp::WebPPictureFree(&mut pic);
+            return Err(WebPError::from_code(pic.error_code));
+          }
+          pic.y = frame.data[0];
+          pic.y_stride = frame.linesize[0];
+          pic.u = frame.data[1];
+          pic.v = frame.data[2];
+          pic.uv_stride = frame.linesize[1];
+        }
+        ffmpeg::AVPixelFormat_AV_PIX_FMT_RGB24
+          if libwebp::WebPPictureImportRGB(&mut pic, frame.data[0], frame.linesize[0]) == 0 =>
+        {
+          libwebp::WebPPictureFree(&mut pic);
+          return Err(WebPError::from_code(pic.error_code));
+        }
+        format => return Err(WebPError::from_format(format)),
       }
 
       Ok(Self { pic, config })

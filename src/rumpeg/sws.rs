@@ -136,7 +136,7 @@ impl SwsContextBuilder {
       output: SwsFrameProperties {
         width: 0,
         height: 0,
-        pixel_format: ffmpeg::AVPixelFormat_AV_PIX_FMT_RGB24,
+        pixel_format: ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
       },
     }
   }

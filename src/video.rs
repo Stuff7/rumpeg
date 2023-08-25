@@ -108,7 +108,7 @@ impl Video {
     )?;
 
     let film_width = film_roll.width;
-    let film_data = film_roll.data_mut();
+    let film_data = film_roll.data_mut(0);
 
     for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
       frame = self
@@ -121,6 +121,7 @@ impl Video {
       let tile_y_offset = tile_y * tile_h + (tile_h - frame.height) / 2;
 
       let film_data_start = (tile_x_offset + film_width * tile_y_offset) * COLOR_CHANNELS;
+      let frame_data = frame.data(0);
 
       for y in 0..frame.height {
         let film_row_start = (film_data_start + film_width * y * COLOR_CHANNELS) as usize;
@@ -128,7 +129,7 @@ impl Video {
 
         film_data[film_row_start..film_row_start + (frame.width * COLOR_CHANNELS) as usize]
           .copy_from_slice(
-            &frame.data()[frame_row_start..frame_row_start + frame.width as usize * 3],
+            &frame_data[frame_row_start..frame_row_start + frame.width as usize * 3],
           );
       }
     }
