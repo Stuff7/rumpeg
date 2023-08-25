@@ -1,14 +1,12 @@
 use crate::ascii::Color;
 use crate::ascii::RESET;
+use crate::ffmpeg;
 use crate::math;
 use crate::rumpeg::*;
 use std::fmt;
 use thiserror::Error;
 
 const MAX_FILM_WIDTH: i32 = 10;
-const FILM_FRAME_W: i32 = 16;
-const FILM_FRAME_H: i32 = 9;
-const COLOR_CHANNELS: i32 = 3;
 
 #[derive(Debug)]
 pub struct Video {
@@ -85,52 +83,50 @@ impl Video {
       return Err(VideoError::NoFramesInFilmRoll(tile_count));
     }
 
-    let (tile_h, tile_w) = {
-      let mut w = self.sws_context.width();
-      let mut h = self.sws_context.height();
-      if self
-        .display_matrix
-        .is_some_and(|m| m.rotation().abs() == 90.)
-      {
-        std::mem::swap(&mut w, &mut h);
-      }
-      if h > w {
-        (h, h * FILM_FRAME_W / FILM_FRAME_H)
-      } else {
-        (w * FILM_FRAME_H / FILM_FRAME_W, w)
-      }
+    let (tile_w, tile_h) = if self
+      .display_matrix
+      .is_some_and(|m| m.rotation().abs() == 90.)
+    {
+      (self.sws_context.height(), self.sws_context.width())
+    } else {
+      (self.sws_context.width(), self.sws_context.height())
     };
 
     let mut film_roll = AVFrame::new(
-      crate::ffmpeg::AVPixelFormat_AV_PIX_FMT_RGB24,
+      ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
       tile_w * std::cmp::min(tile_count, MAX_FILM_WIDTH),
       tile_h * (tile_count as f64 / MAX_FILM_WIDTH as f64).ceil() as i32,
     )?;
 
-    let film_width = film_roll.width;
-    let film_data = film_roll.data_mut(0);
+    for plane in 0..3 {
+      let film_stride = film_roll.linesize[plane];
+      let film_data = film_roll.data_mut(plane);
 
-    for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
-      frame = self
-        .sws_context
-        .transform(&mut frame, self.display_matrix)?;
+      for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
+        frame = self
+          .sws_context
+          .transform(&mut frame, self.display_matrix)?;
 
-      let tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
-      let tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
-      let tile_x_offset = tile_x * tile_w + (tile_w - frame.width) / 2;
-      let tile_y_offset = tile_y * tile_h + (tile_h - frame.height) / 2;
+        let frame_stride = frame.linesize[plane];
+        let frame_height = frame.plane_height(plane);
 
-      let film_data_start = (tile_x_offset + film_width * tile_y_offset) * COLOR_CHANNELS;
-      let frame_data = frame.data(0);
+        let tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
+        let tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
+        let tile_x_offset = tile_x * frame_stride;
+        let tile_y_offset = tile_y * frame_height;
 
-      for y in 0..frame.height {
-        let film_row_start = (film_data_start + film_width * y * COLOR_CHANNELS) as usize;
-        let frame_row_start = (y * frame.width * COLOR_CHANNELS) as usize;
+        let film_data_start = tile_x_offset + film_stride * tile_y_offset;
+        let frame_data = frame.data(plane);
 
-        film_data[film_row_start..film_row_start + (frame.width * COLOR_CHANNELS) as usize]
-          .copy_from_slice(
-            &frame_data[frame_row_start..frame_row_start + frame.width as usize * 3],
-          );
+        for y in 0..frame_height {
+          let film_row_start = (film_data_start + film_stride * y) as usize;
+          let film_row_end = film_row_start + frame_stride as usize;
+          let frame_row_start = (y * frame_stride) as usize;
+          let frame_row_end = frame_row_start + frame_stride as usize;
+
+          film_data[film_row_start..film_row_end]
+            .copy_from_slice(&frame_data[frame_row_start..frame_row_end]);
+        }
       }
     }
 
