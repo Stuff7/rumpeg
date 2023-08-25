@@ -1,7 +1,7 @@
 use std::{
   array::TryFromSliceError,
   fmt,
-  ops::{Deref, Index},
+  ops::{Deref, Index, IndexMut},
 };
 
 use thiserror::Error;
@@ -81,6 +81,13 @@ impl Index<(usize, usize)> for Matrix3x3 {
   fn index(&self, index: (usize, usize)) -> &i32 {
     let (i, j) = index;
     &self.data[3 * i + j]
+  }
+}
+
+impl IndexMut<(usize, usize)> for Matrix3x3 {
+  fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+    let (i, j) = index;
+    &mut self.data[3 * i + j]
   }
 }
 
