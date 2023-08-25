@@ -65,7 +65,7 @@ impl AVStream {
           return match Matrix3x3::from_side_data(side_data) {
             Ok(display_matrix) => Some(display_matrix),
             Err(e) => {
-              log!(err@"Found display matrix but failed to parse it {e}");
+              log!(err@"Found display matrix but failed to parse it\n{e}\n");
               None
             }
           };
