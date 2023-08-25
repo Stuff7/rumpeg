@@ -39,7 +39,7 @@ impl Matrix3x3 {
         // | 6 7 8 |
         // All numbers are stored in native endianness, as 16.16 fixed-point values,
         // except for 2, 5 and 8, which are stored as 2.30 fixed-point values.
-        *value = to_fixed_point(*value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
+        *value = fixed_point_to_double(*value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
       }
       Ok(Self { data: matrix })
     }
@@ -65,13 +65,11 @@ impl Matrix3x3 {
       return 0.;
     }
 
-    let rotation = f32::atan2(
+    f32::atan2(
       (self.data[1] as f32) / scale[1],
       (self.data[0] as f32) / scale[0],
     ) * 180_f32
-      / std::f32::consts::PI;
-
-    -rotation
+      / std::f32::consts::PI
   }
 }
 
@@ -116,6 +114,6 @@ impl Deref for Matrix3x3 {
   }
 }
 
-fn to_fixed_point(x: i32, n: i32) -> i32 {
+fn fixed_point_to_double(x: i32, n: i32) -> i32 {
   ((x as f32) / (1 << n) as f32) as i32
 }
