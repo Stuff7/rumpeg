@@ -31,7 +31,10 @@ impl CLIArgs {
         SeekPosition::TimeBase(0) => SeekPosition::Percentage(1.),
         n => n,
       },
-      step: Self::find_arg(&args, "-step"),
+      step: match Self::find_arg(&args, "-step") {
+        SeekPosition::TimeBase(0) => SeekPosition::TimeBase(1),
+        n => n,
+      },
     })
   }
 
