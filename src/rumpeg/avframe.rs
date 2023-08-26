@@ -224,7 +224,7 @@ impl Iterator for AVFrameIter {
         Ok(..) => unsafe {
           if packet.stream_index == self.stream_index {
             if let Err(e) = packet.send(self.codec_context) {
-              println!("{e}");
+              log!(err@"{e}\n");
             }
             match frame.receive_packet(self.codec_context) {
               Ok(changed) => {
@@ -237,7 +237,7 @@ impl Iterator for AVFrameIter {
                       self.stream_index,
                       0,
                       self.next_timestamp,
-                      self.end,
+                      self.next_timestamp,
                       ffmpeg::AVSEEK_FLAG_BACKWARD as i32,
                     );
                   }
