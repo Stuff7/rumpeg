@@ -86,7 +86,7 @@ impl AVFrame {
 
     for plane in 0..3 {
       let src_stride = self.linesize[plane] as usize;
-      let dst_stride = dest.linesize[plane] as usize;
+      let dst_stride = dest.linesize[plane];
       let dst_height = dest.plane_height(plane) as f32;
 
       let (x, y) = match rotation {
@@ -105,9 +105,9 @@ impl AVFrame {
         let q = (i / src_stride) as f32;
 
         let z = u * p + v * q + w;
-        let dp = ((a * p + c * q + x) / z) as usize;
-        let dq = ((b * p + d * q + y) / z) as usize;
-        let di = dp + dst_stride * dq;
+        let dp = ((a * p + c * q + x) / z) as i32;
+        let dq = ((b * p + d * q + y) / z) as i32;
+        let di = (dp + dst_stride * dq) as usize;
 
         dst_data[di] = src_data[i];
       }
