@@ -44,13 +44,13 @@ impl Matrix3x3 {
 
   /// Extract the rotation component of the transformation matrix and
   /// returns the angle (in degrees) by which the transformation rotates
-  /// the frame counterclockwise. The angle will be in range `[-180.0, 180.0]`,
-  /// or `None` if the matrix is singular
+  /// the frame clockwise. The angle will be in range `[-180.0, 180.0]`,
+  /// and 0 if the matrix is singular
   ///
   /// # Arguments
   /// * `matrix` - The transformation matrix
   ///
-  /// *Note: This is a translated implementation from
+  /// *Based on the implementation from
   /// [libavutil](https://ffmpeg.org/doxygen/trunk/display_8c_source.html#l00035)*
   pub fn rotation(&self) -> f32 {
     let mut scale = [0_f32; 2];
