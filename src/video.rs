@@ -6,7 +6,7 @@ use crate::rumpeg::*;
 use std::fmt;
 use thiserror::Error;
 
-const MAX_FILM_WIDTH: i32 = 10;
+const MAX_FILM_WIDTH: i32 = 8;
 
 #[derive(Debug)]
 pub struct Video {
@@ -83,40 +83,60 @@ impl Video {
       return Err(VideoError::NoFramesInFilmRoll(tile_count));
     }
 
-    let (tile_w, tile_h) = if self
+    let (tile_w, tile_h) = (self.sws_context.width(), self.sws_context.height());
+    let mut tile_cols = std::cmp::min(tile_count, MAX_FILM_WIDTH);
+    let mut tile_rows = (tile_count as f64 / MAX_FILM_WIDTH as f64).ceil() as i32;
+    let rotation = self
       .display_matrix
-      .is_some_and(|m| m.rotation().abs() == 90.)
-    {
-      (self.sws_context.height(), self.sws_context.width())
-    } else {
-      (self.sws_context.width(), self.sws_context.height())
-    };
+      .map(|m| m.rotation() as i32)
+      .unwrap_or(0);
+
+    if rotation.abs() == 90 {
+      std::mem::swap(&mut tile_cols, &mut tile_rows);
+    }
 
     let mut film_roll = AVFrame::new(
       ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-      tile_w * std::cmp::min(tile_count, MAX_FILM_WIDTH),
-      tile_h * (tile_count as f64 / MAX_FILM_WIDTH as f64).ceil() as i32,
+      tile_w * tile_cols,
+      tile_h * tile_rows,
     )?;
 
-    for plane in 0..3 {
-      let film_stride = film_roll.linesize[plane];
-      let film_data = film_roll.data_mut(plane);
+    for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
+      frame = self.sws_context.transform(&mut frame, None)?; // Rotating the final film frame performs better
 
-      for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
-        frame = self
-          .sws_context
-          .transform(&mut frame, self.display_matrix)?;
+      let mut tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
+      let mut tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
 
+      if rotation.abs() == 90 {
+        std::mem::swap(&mut tile_x, &mut tile_y);
+      }
+
+      for plane in 0..3 {
         let frame_stride = frame.linesize[plane];
         let frame_height = frame.plane_height(plane);
+        let frame_data = frame.data(plane);
 
-        let tile_x = thumb_pos as i32 % MAX_FILM_WIDTH;
-        let tile_y = thumb_pos as i32 / MAX_FILM_WIDTH;
-        let tile_x_offset = tile_x * frame_stride;
-        let tile_y_offset = tile_y * frame_height;
+        let film_stride = film_roll.linesize[plane];
+        let film_height = film_roll.plane_height(plane);
+        let film_data = film_roll.data_mut(plane);
+
+        let (tile_x_offset, tile_y_offset) = match rotation {
+          -180 | 180 => (
+            film_stride - tile_x * frame_stride - frame_stride,
+            film_height - tile_y * frame_height - frame_height,
+          ),
+          -90 => (
+            film_stride - tile_x * frame_stride - frame_stride,
+            tile_y * frame_height,
+          ),
+          90 => (
+            tile_x * frame_stride,
+            film_height - tile_y * frame_height - frame_height,
+          ),
+          _ => (tile_x * frame_stride, tile_y * frame_height),
+        };
 
         let film_data_start = tile_x_offset + film_stride * tile_y_offset;
-        let frame_data = frame.data(plane);
 
         for y in 0..frame_height {
           let film_row_start = (film_data_start + film_stride * y) as usize;
@@ -128,6 +148,10 @@ impl Video {
             .copy_from_slice(&frame_data[frame_row_start..frame_row_end]);
         }
       }
+    }
+
+    if let Some(matrix) = self.display_matrix {
+      film_roll.transform(matrix)?;
     }
 
     Ok(film_roll)

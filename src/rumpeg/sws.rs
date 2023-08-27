@@ -37,7 +37,7 @@ impl SwsContext {
     transform: Option<Matrix3x3>,
   ) -> RumpegResult<AVFrame> {
     unsafe {
-      let output = AVFrame::new(
+      let mut output = AVFrame::new(
         self.output.pixel_format,
         self.output.width,
         self.output.height,
@@ -53,11 +53,11 @@ impl SwsContext {
         output.linesize.as_ptr() as *mut _,
       );
 
-      Ok(if let Some(matrix) = transform {
+      if let Some(matrix) = transform {
         output.transform(matrix)?
-      } else {
-        output
-      })
+      }
+
+      Ok(output)
     }
   }
 

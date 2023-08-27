@@ -45,13 +45,13 @@ fn main() {
     println!("{}", video);
   }
   let start_time = Instant::now();
+  unwrap!(Ok save_image(&video, "temp/image", args.seek_position), Err "Failed to save image");
   if args.film {
     unwrap!(
       Ok save_film_roll(&video, "temp/image", args.seek_position, args.end, args.step),
       Err "Failed to save film roll"
     );
   }
-  unwrap!(Ok save_image(&video, "temp/image", args.seek_position), Err "Failed to save image");
   let end_time = Instant::now();
   log!(success@"Done in {:?}", end_time - start_time)
 }

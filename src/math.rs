@@ -1,5 +1,4 @@
 use std::{
-  array::TryFromSliceError,
   fmt,
   ops::{Deref, Index, IndexMut},
 };
@@ -10,8 +9,6 @@ use crate::ffmpeg;
 
 #[derive(Error, Debug)]
 pub enum MathError {
-  #[error("Failed to parse display matrix\n{0}")]
-  DisplayMatrixParsingFail(#[from] TryFromSliceError),
   #[error("Packet side data size invalid {0:?}")]
   InvalidSideDataSize(ffmpeg::AVPacketSideData),
 }
@@ -20,7 +17,7 @@ type MathResult<T = ()> = Result<T, MathError>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Matrix3x3 {
-  data: [i32; 9],
+  data: [f32; 9],
 }
 
 impl Matrix3x3 {
@@ -30,16 +27,16 @@ impl Matrix3x3 {
     }
 
     unsafe {
-      let mut matrix: [i32; 9] =
-        std::slice::from_raw_parts(side_data.data as *const i32, 9).try_into()?;
-      // loop 3x3 matrix
-      for (i, value) in matrix.iter_mut().enumerate() {
+      let mut matrix = [0_f32; 9];
+      let data = side_data.data as *const i32;
+      for (i, matrix_value) in matrix.iter_mut().enumerate() {
+        let value = *data.add(i) as f32;
         // | 0 1 2 |
         // | 3 4 5 |
         // | 6 7 8 |
         // All numbers are stored in native endianness, as 16.16 fixed-point values,
         // except for 2, 5 and 8, which are stored as 2.30 fixed-point values.
-        *value = fixed_point_to_double(*value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
+        *matrix_value = fixed_point_to_f32(value, if i == 2 || i == 5 || i == 8 { 30 } else { 16 });
       }
       Ok(Self { data: matrix })
     }
@@ -58,25 +55,21 @@ impl Matrix3x3 {
   pub fn rotation(&self) -> f32 {
     let mut scale = [0_f32; 2];
 
-    scale[0] = f32::hypot(self.data[0] as f32, self.data[3] as f32);
-    scale[1] = f32::hypot(self.data[1] as f32, self.data[4] as f32);
+    scale[0] = f32::hypot(self.data[0], self.data[3]);
+    scale[1] = f32::hypot(self.data[1], self.data[4]);
 
     if scale[0] == 0.0 || scale[1] == 0.0 {
       return 0.;
     }
 
-    f32::atan2(
-      (self.data[1] as f32) / scale[1],
-      (self.data[0] as f32) / scale[0],
-    ) * 180_f32
-      / std::f32::consts::PI
+    f32::atan2(self.data[1] / scale[1], self.data[0] / scale[0]) * 180_f32 / std::f32::consts::PI
   }
 }
 
 impl Index<(usize, usize)> for Matrix3x3 {
-  type Output = i32;
+  type Output = f32;
 
-  fn index(&self, index: (usize, usize)) -> &i32 {
+  fn index(&self, index: (usize, usize)) -> &f32 {
     let (i, j) = index;
     &self.data[3 * i + j]
   }
@@ -94,26 +87,22 @@ impl fmt::Display for Matrix3x3 {
     for i in 0..3 {
       write!(f, "|")?;
       for j in 0..3 {
-        write!(f, "{:^8}", self[(i, j)])?;
+        write!(f, "{:>8.1}", self[(i, j)])?;
       }
-      if i == 2 {
-        write!(f, "|")?
-      } else {
-        writeln!(f, "|")?
-      };
+      writeln!(f, "|")?;
     }
     Ok(())
   }
 }
 
 impl Deref for Matrix3x3 {
-  type Target = [i32; 9];
+  type Target = [f32; 9];
 
   fn deref(&self) -> &Self::Target {
     &self.data
   }
 }
 
-fn fixed_point_to_double(x: i32, n: i32) -> i32 {
-  ((x as f32) / (1 << n) as f32) as i32
+fn fixed_point_to_f32(x: f32, n: i32) -> f32 {
+  x / (1 << n) as f32
 }

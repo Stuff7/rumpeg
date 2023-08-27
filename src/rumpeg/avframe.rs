@@ -68,9 +68,13 @@ impl AVFrame {
   /// ```
   ///
   /// *Reference: [ffmpeg docs](https://ffmpeg.org/doxygen/trunk/group__lavu__video__display.html)*
-  pub fn transform(&self, transform: math::Matrix3x3) -> RumpegResult<Self> {
-    let rotation = transform.rotation();
-    let (dst_width, dst_height) = if rotation.abs() == 90. {
+  pub fn transform(&mut self, transform: math::Matrix3x3) -> RumpegResult<()> {
+    let rotation = transform.rotation() as i32;
+    if rotation == 0 {
+      return Ok(());
+    }
+
+    let (dst_width, dst_height) = if rotation.abs() == 90 {
       (self.height, self.width)
     } else {
       (self.width, self.height)
@@ -78,33 +82,38 @@ impl AVFrame {
 
     let mut dest = Self::new(self.format, dst_width, dst_height)?;
 
-    let [a, b, u, c, d, v, x, y, w] = *transform;
+    let [a, b, u, c, d, v, _, _, w] = *transform;
 
     for plane in 0..3 {
-      let src_stride = self.linesize[plane];
-      let dst_stride = dest.linesize[plane];
-      let dst_height = dest.plane_height(plane);
+      let src_stride = self.linesize[plane] as usize;
+      let dst_stride = dest.linesize[plane] as usize;
+      let dst_height = dest.plane_height(plane) as f32;
 
-      let x = if x != 0 { dst_stride - 1 } else { x };
-      let y = if y != 0 { dst_height - 1 } else { y };
+      let (x, y) = match rotation {
+        -180 | 180 => (dst_stride as f32 - 1., dst_height - 1.),
+        90 => (dst_stride as f32 - 1., 0.),
+        -90 => (0., dst_height - 1.),
+        _ => (0., 0.),
+      };
 
       let src_data = self.data(plane);
       let dst_data = dest.data_mut(plane);
 
       #[allow(clippy::needless_range_loop)]
       for i in 0..src_data.len() {
-        let p = i as i32 % src_stride;
-        let q = i as i32 / src_stride;
+        let p = (i % src_stride) as f32;
+        let q = (i / src_stride) as f32;
 
         let z = u * p + v * q + w;
-        let dp = (a * p + c * q + x) / z;
-        let dq = (b * p + d * q + y) / z;
-        let di = (dp + dst_stride * dq) as usize;
+        let dp = ((a * p + c * q + x) / z) as usize;
+        let dq = ((b * p + d * q + y) / z) as usize;
+        let di = dp + dst_stride * dq;
 
         dst_data[di] = src_data[i];
       }
     }
-    Ok(dest)
+    *self = dest;
+    Ok(())
   }
 
   pub fn receive_packet(
