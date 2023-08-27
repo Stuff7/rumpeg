@@ -70,8 +70,9 @@ impl AVFrame {
   /// *Reference: [ffmpeg docs](https://ffmpeg.org/doxygen/trunk/group__lavu__video__display.html)*
   pub fn transform(&mut self, transform: math::Matrix3x3) -> RumpegResult<()> {
     let rotation = transform.rotation() as i32;
-    if rotation == 0 {
-      return Ok(());
+    match rotation.abs() {
+      180 | 90 => (),
+      _ => return Ok(()),
     }
 
     let (dst_width, dst_height) = if rotation.abs() == 90 {
