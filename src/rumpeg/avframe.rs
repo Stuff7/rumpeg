@@ -70,9 +70,9 @@ impl AVFrame {
   /// *Reference: [ffmpeg docs](https://ffmpeg.org/doxygen/trunk/group__lavu__video__display.html)*
   pub fn transform(&mut self, transform: math::Matrix3x3) -> RumpegResult<()> {
     let rotation = transform.rotation() as i32;
-    match rotation.abs() {
-      180 | 90 => (),
-      _ => return Ok(()),
+
+    if rotation == 0 {
+      return Ok(());
     }
 
     let (dst_width, dst_height) = if rotation.abs() == 90 {
@@ -87,23 +87,23 @@ impl AVFrame {
 
     for plane in 0..3 {
       let src_stride = self.linesize[plane] as usize;
+      let src_height = self.plane_height(plane) as f32;
       let dst_stride = dest.linesize[plane];
       let dst_height = dest.plane_height(plane) as f32;
 
-      let (x, y) = match rotation {
-        -180 | 180 => (dst_stride as f32 - 1., dst_height - 1.),
-        90 => (dst_stride as f32 - 1., 0.),
-        -90 => (0., dst_height - 1.),
-        _ => (0., 0.),
-      };
+      let src_x = (src_stride as f32 - 1.) / 2.0;
+      let src_y = (src_height - 1.) / 2.0;
+
+      let x = (dst_stride as f32 - 1.) / 2.0;
+      let y = (dst_height - 1.) / 2.0;
 
       let src_data = self.data(plane);
       let dst_data = dest.data_mut(plane);
 
       #[allow(clippy::needless_range_loop)]
       for i in 0..src_data.len() {
-        let p = (i % src_stride) as f32;
-        let q = (i / src_stride) as f32;
+        let p = (i % src_stride) as f32 - src_x;
+        let q = (i / src_stride) as f32 - src_y;
 
         let z = u * p + v * q + w;
         let dp = ((a * p + c * q + x) / z) as i32;
