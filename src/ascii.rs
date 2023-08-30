@@ -35,45 +35,79 @@ pub trait Color {
   {
     format!("{self}{RESET}")
   }
-  fn err(&self) -> String
-  where
-    Self: Display,
-  {
-    self.bold().underline().rgb(255, 75, 75).reset()
-  }
-  fn success(&self) -> String
-  where
-    Self: Display,
-  {
-    self.bold().underline().rgb(0, 255, 94).reset()
-  }
-  fn info(&self) -> String
-  where
-    Self: Display,
-  {
-    self.bold().underline().rgb(240, 105, 255).reset()
-  }
-  fn log(&self) -> String
-  where
-    Self: Display,
-  {
-    self.rgb(255, 253, 194).reset()
-  }
 }
 
 impl Color for String {}
 impl<'a> Color for &'a str {}
 
+pub trait LogDisplay: Color {
+  fn err(&self) -> String
+  where
+    Self: Display,
+  {
+    format!(
+      "{}[ERROR]{RESET} {}\n",
+      "".bold().underline().rgb(255, 75, 75),
+      self.rgb(255, 105, 105).reset()
+    )
+  }
+  fn success(&self) -> String
+  where
+    Self: Display,
+  {
+    format!(
+      "{}[OK]{RESET} {}\n",
+      "".bold().underline().rgb(0, 255, 94),
+      self.rgb(0, 255, 155).reset()
+    )
+  }
+  fn info(&self) -> String
+  where
+    Self: Display,
+  {
+    format!(
+      "{}[INFO]{RESET} {}\n",
+      "".bold().underline().rgb(240, 105, 255),
+      self.rgb(250, 155, 255).reset()
+    )
+  }
+  fn warn(&self) -> String
+  where
+    Self: Display,
+  {
+    format!(
+      "{}[WARN]{RESET} {}\n",
+      "".bold().underline().rgb(255, 255, 105),
+      self.rgb(255, 255, 155).reset()
+    )
+  }
+  fn log(&self) -> String
+  where
+    Self: Display,
+  {
+    format!(
+      "{}[LOG] {}\n",
+      "".rgb(255, 253, 194),
+      self.rgb(255, 253, 194).reset()
+    )
+  }
+}
+
+impl LogDisplay for String {}
+impl<'a> LogDisplay for &'a str {}
+
 #[macro_export]
 macro_rules! log {
-  ( $($fn: ident).* @ $( $x: expr ),* ) => {
+  ( $($fn: ident).* @ $($t: tt)* ) => {
     {
-      print!("{}", format!($($x),*).$($fn()).*);
+      let msg = format!($($t)*).$($fn()).*;
+      print!("{}", msg);
     }
   };
-  ( $( $x: expr ),* ) => {
+  ( $($t: tt)* ) => {
     {
-      print!("{}", format!($($x),*).log());
+      let msg = format!($($t)*).log();
+      print!("{}", msg);
     }
   };
 }

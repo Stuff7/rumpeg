@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use super::*;
-use crate::ascii::Color;
+use crate::ascii::LogDisplay;
 use crate::{ffmpeg, log, math::Matrix3x3};
 
 #[derive(Debug)]
@@ -65,7 +65,7 @@ impl AVStream {
           return match Matrix3x3::from_side_data(side_data) {
             Ok(display_matrix) => Some(display_matrix),
             Err(e) => {
-              log!(err@"Found display matrix but failed to parse it\n{e}\n");
+              log!(err@"Found display matrix but failed to parse it\n{e}");
               None
             }
           };

@@ -6,7 +6,7 @@ mod rumpeg;
 mod video;
 mod webp;
 
-use ascii::Color;
+use ascii::LogDisplay;
 use rumpeg::*;
 use std::fs::write;
 use std::time::Instant;
@@ -18,7 +18,6 @@ macro_rules! unwrap {
       Some(v) => v,
       None => {
         log!(err@$( $err ),*);
-        println!();
         return;
       }
     }
@@ -28,7 +27,7 @@ macro_rules! unwrap {
       Ok(v) => v,
       Err(e) => {
         log!(err@$( $err ),*);
-        log!("\n{e}\n");
+        log!(err@"{e}");
         return;
       }
     }
@@ -36,27 +35,39 @@ macro_rules! unwrap {
 }
 
 fn main() {
-  log!(success@"Using Ffmpeg v{} and libwebp v{}\n", rumpeg::version(), webp::version());
+  log!(success@"Using Ffmpeg v{} and libwebp v{}", rumpeg::version(), webp::version());
   let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
   rumpeg::set_log_level(args.log_level);
-  let mut video = unwrap!(Ok Video::open(&args.filepath), Err "Failed to open video");
-  unwrap!(Ok video.resize_output(args.width, args.height), Err "Failed to resize image");
+
+  let video = unwrap!(
+    Ok Video::open(&args.filepath, args.width, args.height),
+    Err "Failed to open video"
+  );
+
   if args.debug {
     println!("{}", video);
   }
+
   let start_time = Instant::now();
-  unwrap!(Ok save_image(&video, "temp/image", args.seek_position), Err "Failed to save image");
+
+  unwrap!(
+    Ok save_image(&video, "temp/image", args.seek_position),
+    Err "Failed to save image"
+  );
+
   if args.film {
     unwrap!(
-      Ok save_film_roll(&video, "temp/image", args.seek_position, args.end, args.step),
+      Ok save_film_strip(&video, "temp/image", args.seek_position, args.end, args.step),
       Err "Failed to save film roll"
     );
   }
+
   let end_time = Instant::now();
+
   log!(success@"Done in {:?}", end_time - start_time)
 }
 
-fn save_film_roll(
+fn save_film_strip(
   video: &Video,
   thumbnail_path: &str,
   start: SeekPosition,
@@ -65,7 +76,7 @@ fn save_film_roll(
 ) -> Result<(), Box<dyn std::error::Error>> {
   write(
     format!("{thumbnail_path}-film.webp"),
-    video.film_roll(start, end, step)?.encode_as_webp()?,
+    video.film_strip(start, end, step)?.encode_as_webp()?,
   )?;
 
   Ok(())

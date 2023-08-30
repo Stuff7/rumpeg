@@ -20,6 +20,7 @@ impl AVPacket {
 impl AVPacket {
   pub fn read(&mut self, format: *mut ffmpeg::AVFormatContext) -> RumpegResult {
     unsafe {
+      AVPacketRef(self.ptr);
       match ffmpeg::av_read_frame(format, self.deref_mut()) {
         0 => Ok(()),
         e => Err(RumpegError::from_code(e, "Failed to read packet")),
@@ -55,6 +56,16 @@ impl Drop for AVPacket {
   fn drop(&mut self) {
     unsafe {
       ffmpeg::av_packet_free(&mut self.ptr);
+    }
+  }
+}
+
+pub struct AVPacketRef(*mut ffmpeg::AVPacket);
+
+impl Drop for AVPacketRef {
+  fn drop(&mut self) {
+    unsafe {
+      ffmpeg::av_packet_unref(self.0);
     }
   }
 }

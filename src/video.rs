@@ -26,14 +26,14 @@ pub struct Video {
 pub enum VideoError {
   #[error(transparent)]
   Rumpeg(#[from] RumpegError),
-  #[error("At least 1 frame is needed to create a film roll, found {0}")]
-  NoFramesInFilmRoll(i32),
+  #[error("At least 1 frame is needed to create a film strip, found {0}")]
+  NoFramesInFilmStrip(i32),
 }
 
 type VideoResult<T = ()> = Result<T, VideoError>;
 
 impl Video {
-  pub fn open(filepath: &str) -> VideoResult<Video> {
+  pub fn open(filepath: &str, w: i32, h: i32) -> VideoResult<Video> {
     let format_context = AVFormatContext::new(filepath)?;
     let codec_context = AVCodecContext::new(format_context.stream.codecpar)?;
     let iformat = AVInputFormat::new(format_context.iformat);
@@ -46,15 +46,11 @@ impl Video {
       height: codec_context.height,
       mime_type: iformat.mime_type,
       width: codec_context.width,
-      sws_context: SwsContextBuilder::from_codec_context(&codec_context).build()?,
+      sws_context: SwsContext::new(SwsFrameProperties::from(&codec_context), w, h)?,
       codec_context,
       display_matrix,
       format_context,
     })
-  }
-
-  pub fn resize_output(&mut self, width: i32, height: i32) -> VideoResult {
-    Ok(self.sws_context.resize_output(width, height)?)
   }
 
   pub fn frame_to_webp(&self, frame: &mut AVFrame) -> VideoResult<&[u8]> {
@@ -66,7 +62,7 @@ impl Video {
     )
   }
 
-  pub fn film_roll(
+  pub fn film_strip(
     &self,
     start: SeekPosition,
     end: SeekPosition,
@@ -80,7 +76,7 @@ impl Video {
     };
 
     if tile_count < 1 {
-      return Err(VideoError::NoFramesInFilmRoll(tile_count));
+      return Err(VideoError::NoFramesInFilmStrip(tile_count));
     }
 
     let (tile_w, tile_h) = (self.sws_context.width(), self.sws_context.height());
@@ -95,11 +91,14 @@ impl Video {
       std::mem::swap(&mut tile_cols, &mut tile_rows);
     }
 
-    let mut film_roll = AVFrame::new(
+    let mut film_strip = AVFrame::new(
       ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
       tile_w * tile_cols,
       tile_h * tile_rows,
     )?;
+    film_strip.data_mut(0).fill(0);
+    film_strip.data_mut(1).fill(128);
+    film_strip.data_mut(2).fill(128);
 
     for (thumb_pos, mut frame) in self.frames(start, end, step)?.enumerate() {
       frame = self.sws_context.transform(&mut frame, None)?; // Rotating the final film frame performs better
@@ -116,9 +115,9 @@ impl Video {
         let frame_height = frame.plane_height(plane);
         let frame_data = frame.data(plane);
 
-        let film_stride = film_roll.linesize[plane];
-        let film_height = film_roll.plane_height(plane);
-        let film_data = film_roll.data_mut(plane);
+        let film_stride = film_strip.linesize[plane];
+        let film_height = film_strip.plane_height(plane);
+        let film_data = film_strip.data_mut(plane);
 
         let (tile_x_offset, tile_y_offset) = match rotation {
           -180 | 180 => (
@@ -153,10 +152,10 @@ impl Video {
     }
 
     if let Some(matrix) = self.display_matrix {
-      film_roll.transform(matrix)?;
+      film_strip.transform(matrix)?;
     }
 
-    Ok(film_roll)
+    Ok(film_strip)
   }
 
   pub fn frames(
@@ -187,7 +186,12 @@ impl fmt::Display for Video {
       - {title}File Name:{RESET} {}\n\
       - {title}Display Matrix:{RESET} {}\n\
       - {title}Rotation:{RESET} {}°\n\
-      {}\n\
+      - {title}Input{RESET}\n  \
+      - {title}Width:{RESET} {}\n  \
+      - {title}Height:{RESET} {}\n\
+      - {title}Output{RESET}\n  \
+      - {title}Width:{RESET} {}\n  \
+      - {title}Height:{RESET} {}\n\
       - {title}Duration:{RESET} {} seconds\n\
       - {title}Extensions:{RESET} {}\n\
       - {title}Format:{RESET} {}\n\
@@ -205,7 +209,10 @@ impl fmt::Display for Video {
         .map(|m| format!("\n{m}"))
         .unwrap_or("None".into()),
       self.display_matrix.map(|m| m.rotation()).unwrap_or(0.),
-      self.sws_context,
+      self.codec_context.width,
+      self.codec_context.height,
+      self.sws_context.width(),
+      self.sws_context.height(),
       self.duration_us as f64 / 1_000_000.,
       self.extensions,
       self.format_name,

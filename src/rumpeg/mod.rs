@@ -17,7 +17,6 @@ pub use sws::*;
 use crate::{ffmpeg, math::MathError, webp::WebPError};
 use std::{
   ffi::{CStr, NulError},
-  fmt::Display,
   str::FromStr,
 };
 use thiserror::Error;

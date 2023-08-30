@@ -2,8 +2,6 @@ use std::ptr;
 
 use super::*;
 
-use crate::ascii::Color;
-use crate::ascii::RESET;
 use crate::ffmpeg;
 use crate::math::Matrix3x3;
 
@@ -15,12 +13,13 @@ pub struct SwsContext {
 }
 
 impl SwsContext {
-  pub fn resize_output(&mut self, width: i32, height: i32) -> RumpegResult {
-    self.output.width = width;
-    self.output.height = height;
-    self.output.copy_aspect_ratio(self.input);
-    self.ptr = Self::get_context_ptr(self.ptr, self.input, self.output)?;
-    Ok(())
+  pub fn new(input: SwsFrameProperties, out_w: i32, out_h: i32) -> RumpegResult<Self> {
+    let output = input.output(out_w, out_h);
+    Ok(Self {
+      input,
+      output,
+      ptr: Self::get_context_ptr(input, output)?,
+    })
   }
 
   pub fn width(&self) -> i32 {
@@ -37,11 +36,7 @@ impl SwsContext {
     transform: Option<Matrix3x3>,
   ) -> RumpegResult<AVFrame> {
     unsafe {
-      let mut output = AVFrame::new(
-        self.output.pixel_format,
-        self.output.width,
-        self.output.height,
-      )?;
+      let mut output = AVFrame::new(self.output.format, self.output.width, self.output.height)?;
 
       ffmpeg::sws_scale(
         self.ptr,
@@ -63,7 +58,6 @@ impl SwsContext {
 
   #[inline]
   fn get_context_ptr(
-    ptr: *mut ffmpeg::SwsContext,
     input: SwsFrameProperties,
     output: SwsFrameProperties,
   ) -> RumpegResult<*mut ffmpeg::SwsContext> {
@@ -76,14 +70,13 @@ impl SwsContext {
         flags |= ffmpeg::SWS_ACCURATE_RND as i32
       }
 
-      let ptr = ffmpeg::sws_getCachedContext(
-        ptr,
+      let ptr = ffmpeg::sws_getContext(
         input.width,
         input.height,
-        input.pixel_format,
+        input.format,
         output.width,
         output.height,
-        output.pixel_format,
+        output.format,
         flags,
         ptr::null_mut(),
         ptr::null_mut(),
@@ -96,18 +89,6 @@ impl SwsContext {
         Ok(ptr)
       }
     }
-  }
-}
-
-impl Display for SwsContext {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "- {title}Input:{RESET}\n  {}\n- {title}Output:{RESET}\n  {}",
-      self.input.to_string().replace('\n', "\n  "),
-      self.output.to_string().replace('\n', "\n  "),
-      title = "".rgb(75, 200, 200),
-    )
   }
 }
 
@@ -133,61 +114,24 @@ impl Drop for SwsContext {
   }
 }
 
-#[derive(Debug)]
-pub struct SwsContextBuilder {
-  input: SwsFrameProperties,
-  output: SwsFrameProperties,
-}
-
-impl SwsContextBuilder {
-  pub fn from_codec_context(codec_context: &AVCodecContext) -> Self {
-    Self {
-      input: SwsFrameProperties {
-        width: codec_context.width,
-        height: codec_context.height,
-        pixel_format: codec_context.format,
-      },
-      output: SwsFrameProperties {
-        width: 0,
-        height: 0,
-        pixel_format: ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
-      },
-    }
-  }
-
-  pub fn build(&mut self) -> RumpegResult<SwsContext> {
-    self.output.copy_aspect_ratio(self.input);
-    Ok(SwsContext {
-      ptr: SwsContext::get_context_ptr(ptr::null_mut(), self.input, self.output)?,
-      input: self.input,
-      output: self.output,
-    })
-  }
-
-  pub fn width(&mut self, w: i32) -> &mut Self {
-    self.output.width = w;
-    self
-  }
-
-  pub fn height(&mut self, h: i32) -> &mut Self {
-    self.output.height = h;
-    self
-  }
-
-  pub fn pixel_format(&mut self, f: i32) -> &mut Self {
-    self.output.pixel_format = f;
-    self
-  }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct SwsFrameProperties {
-  width: i32,
-  height: i32,
-  pixel_format: i32,
+  pub width: i32,
+  pub height: i32,
+  pub format: i32,
 }
 
 impl SwsFrameProperties {
+  pub fn output(&self, width: i32, height: i32) -> Self {
+    let mut output = Self {
+      width,
+      height,
+      format: ffmpeg::AVPixelFormat_AV_PIX_FMT_YUV420P,
+    };
+    output.copy_aspect_ratio(*self);
+    output
+  }
+
   fn copy_aspect_ratio(&mut self, other: Self) {
     if self.width < 1 {
       self.width = if self.height > 0 {
@@ -206,17 +150,22 @@ impl SwsFrameProperties {
   }
 }
 
-impl Display for SwsFrameProperties {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "- {title}Width:{RESET} {}\n\
-      - {title}Height:{RESET} {}\n\
-      - {title}Format:{RESET} {}",
-      self.width,
-      self.height,
-      self.pixel_format,
-      title = "".rgb(75, 200, 200),
-    )
+impl From<&AVFrame> for SwsFrameProperties {
+  fn from(frame: &AVFrame) -> Self {
+    Self {
+      width: frame.width,
+      height: frame.height,
+      format: frame.format,
+    }
+  }
+}
+
+impl From<&AVCodecContext> for SwsFrameProperties {
+  fn from(codec_context: &AVCodecContext) -> Self {
+    Self {
+      width: codec_context.width,
+      height: codec_context.height,
+      format: codec_context.format,
+    }
   }
 }

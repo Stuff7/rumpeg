@@ -1,6 +1,6 @@
 use super::avpixel::AVPixelFormatMethods;
 use super::*;
-use crate::ascii::Color;
+use crate::ascii::LogDisplay;
 use crate::ffmpeg;
 use crate::log;
 use crate::math;
@@ -234,7 +234,7 @@ impl Iterator for AVFrameIter {
         Ok(..) => unsafe {
           if packet.stream_index == self.stream_index {
             if let Err(e) = packet.send(self.codec_context) {
-              log!(err@"{e}\n");
+              log!(warn@"{e}");
             }
             match frame.receive_packet(self.codec_context) {
               Ok(changed) => {
@@ -255,7 +255,7 @@ impl Iterator for AVFrameIter {
                 }
               }
               Err(e) => {
-                log!(err@"{e}");
+                log!(warn@"{e}");
                 return None;
               }
             };
@@ -267,9 +267,18 @@ impl Iterator for AVFrameIter {
               return None;
             }
           }
-          log!(err@"Encountered AVError while reading frame {e}");
+          log!(warn@"Encountered AVError while reading frame {e}");
         }
       }
+    }
+  }
+}
+
+impl Drop for AVFrameIter {
+  fn drop(&mut self) {
+    unsafe {
+      ffmpeg::avcodec_flush_buffers(self.codec_context);
+      ffmpeg::avformat_flush(self.format_context);
     }
   }
 }
