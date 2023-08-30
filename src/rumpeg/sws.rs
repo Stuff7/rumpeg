@@ -111,6 +111,20 @@ impl Display for SwsContext {
   }
 }
 
+impl std::ops::Deref for SwsContext {
+  type Target = ffmpeg::SwsContext;
+
+  fn deref(&self) -> &Self::Target {
+    unsafe { &*self.ptr }
+  }
+}
+
+impl std::ops::DerefMut for SwsContext {
+  fn deref_mut(&mut self) -> &mut Self::Target {
+    unsafe { &mut *self.ptr }
+  }
+}
+
 impl Drop for SwsContext {
   fn drop(&mut self) {
     unsafe {
@@ -204,19 +218,5 @@ impl Display for SwsFrameProperties {
       self.pixel_format,
       title = "".rgb(75, 200, 200),
     )
-  }
-}
-
-impl std::ops::Deref for SwsContext {
-  type Target = ffmpeg::SwsContext;
-
-  fn deref(&self) -> &Self::Target {
-    unsafe { &*self.ptr }
-  }
-}
-
-impl std::ops::DerefMut for SwsContext {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    unsafe { &mut *self.ptr }
   }
 }
