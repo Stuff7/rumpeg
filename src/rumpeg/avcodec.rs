@@ -94,7 +94,7 @@ impl DerefMut for AVCodecContext {
 impl Drop for AVCodecContext {
   fn drop(&mut self) {
     unsafe {
-      ffmpeg::avcodec_close(self.ptr);
+      ffmpeg::avcodec_free_context(&mut self.ptr);
     }
   }
 }
