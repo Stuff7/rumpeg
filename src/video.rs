@@ -144,8 +144,10 @@ impl Video {
           let frame_row_start = (y * frame_stride) as usize;
           let frame_row_end = frame_row_start + frame_stride as usize;
 
-          film_data[film_row_start..film_row_end]
-            .copy_from_slice(&frame_data[frame_row_start..frame_row_end]);
+          if film_row_end <= film_data.len() {
+            film_data[film_row_start..film_row_end]
+              .copy_from_slice(&frame_data[frame_row_start..frame_row_end]);
+          }
         }
       }
     }
