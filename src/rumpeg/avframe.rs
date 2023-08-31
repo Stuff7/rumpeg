@@ -101,16 +101,19 @@ impl AVFrame {
       let dst_data = dest.data_mut(plane);
 
       #[allow(clippy::needless_range_loop)]
-      for i in 0..src_data.len() {
-        let p = (i % src_stride) as f32 - src_x;
-        let q = (i / src_stride) as f32 - src_y;
+      for di in 0..dst_data.len() as i32 {
+        let dp = (di % dst_stride) as f32 - x;
+        let dq = (di / dst_stride) as f32 - y;
 
-        let z = u * p + v * q + w;
-        let dp = ((a * p + c * q + x) / z) as i32;
-        let dq = ((b * p + d * q + y) / z) as i32;
-        let di = (dp + dst_stride * dq) as usize;
+        let z = u * dp + v * dq + w;
+        let p = ((a * dp - c * dq + src_x) / z) as i32;
+        let q = ((-b * dp + d * dq + src_y) / z) as i32;
 
-        dst_data[di] = src_data[i];
+        let si = (p + q * src_stride as i32) as usize;
+
+        if si < src_data.len() {
+          dst_data[di as usize] = src_data[si];
+        }
       }
     }
     *self = dest;
