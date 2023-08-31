@@ -25,7 +25,7 @@ impl Server {
     log!(success@"Server listening on {addr:?}");
     for (mut stream, request) in RequestIter::new(&self.listener) {
       match request {
-        Request::Http(request) => route(&request)?.send(&mut stream)?,
+        Request::Http(request) => route(&request).send(&mut stream)?,
         Request::Exit => {
           log!(info@"Ctrl+C pressed, exiting...");
           break;
@@ -41,11 +41,16 @@ impl Server {
   }
 }
 
-fn route(request: &HttpRequest) -> ServerResult<HttpResponse> {
+fn route(request: &HttpRequest) -> HttpResponse {
   match request.method.as_str() {
     "GET" if request.path.starts_with("/frame") => routes::get_frame(request),
     _ => Ok(HttpResponse::from_status(HttpStatusCode::NotFound)),
   }
+  .unwrap_or_else(|e| {
+    let mut response = HttpResponse::from_status(HttpStatusCode::InternalServerError(e));
+    response.add_header("Content-Type", "text/plain");
+    response
+  })
 }
 
 fn create_ctrl_c_thread(addr: SocketAddr) -> ServerResult<JoinHandle<ServerResult>> {

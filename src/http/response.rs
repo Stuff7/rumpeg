@@ -1,11 +1,12 @@
 use super::*;
-use std::{io::Write, net::TcpStream};
+use std::{collections::HashMap, io::Write, net::TcpStream};
 
 #[derive(Debug, Default)]
 pub enum HttpStatusCode {
   #[default]
-  OK = 200,
-  NotFound = 404,
+  OK,
+  NotFound,
+  InternalServerError(ServerError),
 }
 
 impl HttpStatusCode {
@@ -13,13 +14,14 @@ impl HttpStatusCode {
     match *self {
       HttpStatusCode::OK => (200, "OK"),
       HttpStatusCode::NotFound => (404, "Not Found"),
+      HttpStatusCode::InternalServerError(..) => (500, "Internal Server Error"),
     }
   }
 }
 
 pub struct HttpResponse {
   status_code: HttpStatusCode,
-  headers: Vec<(String, String)>,
+  headers: HashMap<String, String>, // Using a HashMap for headers
   content: Vec<u8>,
 }
 
@@ -27,7 +29,7 @@ impl HttpResponse {
   pub fn new() -> Self {
     HttpResponse {
       status_code: HttpStatusCode::OK,
-      headers: Vec::new(),
+      headers: HashMap::new(), // Initialize with a HashMap
       content: Vec::new(),
     }
   }
@@ -35,13 +37,13 @@ impl HttpResponse {
   pub fn from_status(status_code: HttpStatusCode) -> Self {
     HttpResponse {
       status_code,
-      headers: Vec::new(),
+      headers: HashMap::new(), // Initialize with a HashMap
       content: Vec::new(),
     }
   }
 
   pub fn add_header(&mut self, key: &str, value: &str) {
-    self.headers.push((key.to_string(), value.to_string()));
+    self.headers.insert(key.to_string(), value.to_string()); // Use insert for HashMap
   }
 
   pub fn add_content(&mut self, content: &[u8]) {
@@ -63,7 +65,13 @@ impl HttpResponse {
     response.push_str("\r\n");
 
     stream.write_all(response.as_bytes())?;
-    stream.write_all(&self.content)?;
+    if self.content.is_empty() {
+      if let HttpStatusCode::InternalServerError(ref e) = self.status_code {
+        stream.write_all(e.to_string().as_bytes())?;
+      }
+    } else {
+      stream.write_all(&self.content)?;
+    }
     stream.flush()?;
     Ok(())
   }

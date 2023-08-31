@@ -17,9 +17,8 @@ pub struct HttpRequest {
 
 impl HttpRequest {
   fn parse(raw_data: &[u8]) -> Option<HttpRequest> {
-    let request = match from_utf8(raw_data) {
-      Ok(request) => request,
-      Err(_) => return None,
+    let Ok(request) = from_utf8(raw_data) else {
+      return None
     };
 
     let lines: Vec<&str> = request.lines().collect();
