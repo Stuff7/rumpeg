@@ -112,32 +112,36 @@ impl Video {
 
       for plane in 0..3 {
         let frame_stride = frame.linesize[plane];
-        let frame_height = frame.plane_height(plane);
-        let frame_data = frame.data(plane);
+        let frame_height = if plane == 0 {
+          frame.plane_height(0) as f32
+        } else {
+          frame.plane_height(0) as f32 / 2.
+        };
 
         let film_stride = film_strip.linesize[plane];
         let film_height = film_strip.plane_height(plane);
-        let film_data = film_strip.data_mut(plane);
 
         let (tile_x_offset, tile_y_offset) = match rotation {
           -180 | 180 => (
             film_stride - tile_x * frame_stride - frame_stride,
-            film_height - tile_y * frame_height - frame_height,
+            (film_height as f32 - tile_y as f32 * frame_height - frame_height) as i32,
           ),
           -90 => (
             film_stride - tile_x * frame_stride - frame_stride,
-            tile_y * frame_height,
+            (tile_y as f32 * frame_height) as i32,
           ),
           90 => (
             tile_x * frame_stride,
-            film_height - tile_y * frame_height - frame_height,
+            (film_height as f32 - tile_y as f32 * frame_height - frame_height) as i32,
           ),
-          _ => (tile_x * frame_stride, tile_y * frame_height),
+          _ => (tile_x * frame_stride, (tile_y as f32 * frame_height) as i32),
         };
 
         let film_data_start = tile_x_offset + film_stride * tile_y_offset;
 
-        for y in 0..frame_height {
+        let frame_data = frame.data(plane);
+        let film_data = film_strip.data_mut(plane);
+        for y in 0..frame_height as i32 {
           let film_row_start = (film_data_start + film_stride * y) as usize;
           let film_row_end = film_row_start + frame_stride as usize;
           let frame_row_start = (y * frame_stride) as usize;
