@@ -21,7 +21,7 @@ impl HttpStatusCode {
 
 pub struct HttpResponse {
   status_code: HttpStatusCode,
-  headers: HashMap<String, String>, // Using a HashMap for headers
+  headers: HashMap<String, String>,
   content: Vec<u8>,
 }
 
@@ -29,7 +29,7 @@ impl HttpResponse {
   pub fn new() -> Self {
     HttpResponse {
       status_code: HttpStatusCode::OK,
-      headers: HashMap::new(), // Initialize with a HashMap
+      headers: HashMap::new(),
       content: Vec::new(),
     }
   }
@@ -37,13 +37,13 @@ impl HttpResponse {
   pub fn from_status(status_code: HttpStatusCode) -> Self {
     HttpResponse {
       status_code,
-      headers: HashMap::new(), // Initialize with a HashMap
+      headers: HashMap::new(),
       content: Vec::new(),
     }
   }
 
   pub fn add_header(&mut self, key: &str, value: &str) {
-    self.headers.insert(key.to_string(), value.to_string()); // Use insert for HashMap
+    self.headers.insert(key.to_string(), value.to_string());
   }
 
   pub fn add_content(&mut self, content: &[u8]) {
