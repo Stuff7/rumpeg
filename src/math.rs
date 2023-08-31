@@ -10,7 +10,7 @@ use crate::ffmpeg;
 #[derive(Error, Debug)]
 pub enum MathError {
   #[error("Packet side data size invalid {0:?}")]
-  InvalidSideDataSize(ffmpeg::AVPacketSideData),
+  InvalidSideDataSize(usize),
 }
 
 type MathResult<T = ()> = Result<T, MathError>;
@@ -23,7 +23,7 @@ pub struct Matrix3x3 {
 impl Matrix3x3 {
   pub fn from_side_data(side_data: ffmpeg::AVPacketSideData) -> MathResult<Self> {
     if side_data.size != 36 {
-      return Err(MathError::InvalidSideDataSize(side_data));
+      return Err(MathError::InvalidSideDataSize(side_data.size));
     }
 
     unsafe {

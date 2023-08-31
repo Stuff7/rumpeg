@@ -1,11 +1,14 @@
 mod ascii;
 mod cli;
 mod ffmpeg;
+mod http;
 mod math;
 mod rumpeg;
 mod video;
 mod webp;
 
+use crate::cli::CLIArgs;
+use crate::http::Server;
 use ascii::LogDisplay;
 use rumpeg::*;
 use std::fs::write;
@@ -36,8 +39,14 @@ macro_rules! unwrap {
 
 fn main() {
   log!(success@"Using Ffmpeg v{} and libwebp v{}", rumpeg::version(), webp::version());
-  let args = unwrap!(Ok cli::CLIArgs::read(), Err "Error");
+  let args = unwrap!(Ok CLIArgs::read(), Err "Error");
   rumpeg::set_log_level(args.log_level);
+
+  if args.host {
+    let server = unwrap!(Ok Server::new("127.0.0.1:8080"), Err "Could not create server");
+    unwrap!(Ok server.listen(), Err "Server could not listen");
+    return;
+  }
 
   let video = unwrap!(
     Ok Video::open(&args.filepath, args.width, args.height),

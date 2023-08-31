@@ -5,6 +5,7 @@ use crate::rumpeg::{LogLevel, SeekPosition};
 
 #[derive(Debug)]
 pub struct CLIArgs {
+  pub host: bool,
   pub film: bool,
   pub debug: bool,
   pub filepath: String,
@@ -20,6 +21,7 @@ impl CLIArgs {
   pub fn read() -> CLIResult<Self> {
     let args: Vec<String> = env::args().collect();
     Ok(Self {
+      host: Self::find_flag(&args, "-host"),
       film: Self::find_flag(&args, "-f"),
       debug: Self::find_flag(&args, "-d"),
       filepath: args.get(1).ok_or(CLIError::FilepathMissing)?.clone(),
