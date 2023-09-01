@@ -10,8 +10,8 @@ pub struct HttpRequest {
   pub method: HttpMethod,
   pub path: String,
   pub query_string: String,
-  headers: Vec<(String, String)>,
-  http_version: String,
+  pub headers: Vec<(String, String)>,
+  pub http_version: String,
 }
 
 impl HttpRequest {
