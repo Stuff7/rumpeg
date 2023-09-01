@@ -9,12 +9,14 @@ use std::time::Duration;
 
 pub struct Server {
   listener: TcpListener,
+  pub router: Router,
 }
 
 impl Server {
   pub fn new(addr: &str) -> ServerResult<Self> {
     Ok(Self {
       listener: TcpListener::bind(addr)?,
+      router: Router::new(),
     })
   }
 
@@ -25,7 +27,7 @@ impl Server {
     log!(success@"Server listening on {addr:?}");
     for (mut stream, request) in RequestIter::new(&self.listener) {
       match request {
-        Request::Http(request) => route(&request).send(&mut stream)?,
+        Request::Http(request) => self.router.route(request).send(&mut stream)?,
         Request::Exit => {
           log!(info@"Ctrl+C pressed, exiting...");
           break;
@@ -41,16 +43,53 @@ impl Server {
   }
 }
 
-fn route(request: &HttpRequest) -> HttpResponse {
-  match request.method.as_str() {
-    "GET" if request.path.starts_with("/frame") => routes::get_frame(request),
-    _ => Ok(HttpResponse::from_status(HttpStatusCode::NotFound)),
+type Route = Box<dyn Fn(&HttpRequest) -> ServerResult<HttpResponse>>;
+pub struct Router {
+  endpoints_get: Vec<(String, Route)>,
+}
+
+impl Router {
+  pub fn new() -> Self {
+    Self {
+      endpoints_get: Vec::new(),
+    }
   }
-  .unwrap_or_else(|e| {
-    let mut response = HttpResponse::from_status(HttpStatusCode::InternalServerError(e));
-    response.add_header("Content-Type", "text/plain");
-    response
-  })
+
+  pub fn get(
+    &mut self,
+    endpoint: &str,
+    route: impl Fn(&HttpRequest) -> ServerResult<HttpResponse> + 'static,
+  ) -> &mut Self {
+    self
+      .endpoints_get
+      .push((endpoint.to_string(), Box::new(route)));
+    self
+  }
+
+  fn route(&self, request: HttpRequestResult) -> HttpResponse {
+    let request = match request {
+      Ok(r) => r,
+      Err(e) => {
+        return HttpStatus::BadRequest(e).into();
+      }
+    };
+
+    let mut endpoints = match request.method {
+      HttpMethod::Get => self.endpoints_get.iter(),
+    };
+
+    endpoints
+      .find(|ep| request.path.starts_with(&ep.0))
+      .map(|ep| ep.1(&request))
+      .unwrap_or(Ok(HttpStatus::NotFound.into()))
+      .unwrap_or_else(|e| {
+        match e {
+          ServerError::BadRequest(e) => HttpStatus::BadRequest(e),
+          _ => HttpStatus::InternalServerError(e),
+        }
+        .into()
+      })
+  }
 }
 
 fn create_ctrl_c_thread(addr: SocketAddr) -> ServerResult<JoinHandle<ServerResult>> {

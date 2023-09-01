@@ -3,6 +3,7 @@ mod cli;
 mod ffmpeg;
 mod http;
 mod math;
+mod routes;
 mod rumpeg;
 mod video;
 mod webp;
@@ -12,6 +13,7 @@ use crate::http::Server;
 use ascii::LogDisplay;
 use rumpeg::*;
 use std::fs::write;
+use std::sync::atomic::{AtomicPtr, Ordering};
 use std::time::Instant;
 use video::Video;
 
@@ -37,13 +39,17 @@ macro_rules! unwrap {
   };
 }
 
+pub static MEDIA_FOLDER: AtomicPtr<String> = AtomicPtr::new(std::ptr::null_mut());
+
 fn main() {
   log!(success@"Using Ffmpeg v{} and libwebp v{}", rumpeg::version(), webp::version());
-  let args = unwrap!(Ok CLIArgs::read(), Err "Error");
+  let mut args = unwrap!(Ok CLIArgs::read(), Err "Error");
   rumpeg::set_log_level(args.log_level);
 
   if args.host {
-    let server = unwrap!(Ok Server::new("127.0.0.1:8080"), Err "Could not create server");
+    let mut server = unwrap!(Ok Server::new("127.0.0.1:8080"), Err "Could not create server");
+    server.router.get("/frame", routes::get_frame);
+    MEDIA_FOLDER.store(&mut args.filepath as *mut _, Ordering::SeqCst);
     unwrap!(Ok server.listen(), Err "Server could not listen");
     return;
   }

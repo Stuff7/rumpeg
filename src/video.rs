@@ -10,7 +10,7 @@ const MAX_FILM_WIDTH: i32 = 8;
 
 #[derive(Debug)]
 pub struct Video {
-  pub duration_us: u64,
+  pub duration_ms: i64,
   pub extensions: &'static str,
   pub format_name: &'static str,
   pub height: i32,
@@ -40,7 +40,7 @@ impl Video {
     let display_matrix = format_context.stream.display_matrix();
 
     Ok(Self {
-      duration_us: format_context.duration as u64,
+      duration_ms: format_context.stream.duration_millis(),
       extensions: iformat.extensions,
       format_name: iformat.format_name,
       height: codec_context.height,
@@ -217,7 +217,7 @@ impl fmt::Display for Video {
       self.codec_context.height,
       self.sws_context.width(),
       self.sws_context.height(),
-      self.duration_us as f64 / 1_000_000.,
+      self.duration_ms as f64 / 1000.,
       self.extensions,
       self.format_name,
       self.codec_context.sample_aspect_ratio,

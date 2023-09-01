@@ -55,6 +55,10 @@ impl AVStream {
     }
   }
 
+  pub fn duration_millis(&self) -> i64 {
+    (self.duration as f64 / self.time_base.den as f64 * 1000.) as i64
+  }
+
   pub fn display_matrix(&self) -> Option<Matrix3x3> {
     unsafe {
       let mut current = 0;

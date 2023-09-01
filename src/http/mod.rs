@@ -1,8 +1,9 @@
+mod parse;
 mod request;
 mod response;
-mod routes;
 mod server;
 
+pub use parse::*;
 pub use request::*;
 pub use response::*;
 pub use server::*;
@@ -22,9 +23,11 @@ pub enum ServerError {
   WebP(#[from] RumpegError),
   #[error("Failed to set Ctrl+C handler")]
   ExitHandler,
+  #[error("Server Error [WebP]: {0}")]
+  BadRequest(#[from] HttpRequestError),
 }
 
-type ServerResult<T = ()> = Result<T, ServerError>;
+pub type ServerResult<T = ()> = Result<T, ServerError>;
 
 const TRUE: i32 = 1;
 const FALSE: i32 = 0;
