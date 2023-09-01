@@ -104,7 +104,7 @@ fn create_ctrl_c_thread(addr: SocketAddr) -> ServerResult<JoinHandle<ServerResul
       .spawn(move || -> ServerResult {
         loop {
           if CTRL_C_PRESSED.load(Ordering::SeqCst) {
-            let mut stream = TcpStream::connect(addr)?;
+            let mut stream = TcpStream::connect(format!("127.0.0.1:{}", addr.port()))?;
             stream.write_all("exit".as_bytes())?;
             stream.shutdown(std::net::Shutdown::Write)?;
             break;

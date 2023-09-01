@@ -47,7 +47,7 @@ fn main() {
   rumpeg::set_log_level(args.log_level);
 
   if args.host {
-    let mut server = unwrap!(Ok Server::new("127.0.0.1:8080"), Err "Could not create server");
+    let mut server = unwrap!(Ok Server::new("0.0.0.0:8080"), Err "Could not create server");
     server.router.get("/frame", routes::get_frame);
     MEDIA_FOLDER.store(&mut args.filepath as *mut _, Ordering::SeqCst);
     unwrap!(Ok server.listen(), Err "Server could not listen");
