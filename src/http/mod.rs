@@ -1,8 +1,10 @@
+mod asset;
 mod parse;
 mod request;
 mod response;
 mod server;
 
+pub use asset::*;
 pub use parse::*;
 pub use request::*;
 pub use response::*;
@@ -15,16 +17,18 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ServerError {
-  #[error("Server Error [IO]: {0}")]
+  #[error("Server Error [IO]\n{0}")]
   IO(#[from] std::io::Error),
-  #[error("Server Error [Video]: {0}")]
+  #[error("Server Error [Video]\n{0}")]
   Video(#[from] VideoError),
-  #[error("Server Error [WebP]: {0}")]
+  #[error("Server Error [WebP]\n{0}")]
   WebP(#[from] RumpegError),
   #[error("Failed to set Ctrl+C handler")]
   ExitHandler,
-  #[error("Server Error [WebP]: {0}")]
+  #[error("Server Error [WebP]\n{0}")]
   BadRequest(#[from] HttpRequestError),
+  #[error("Server Error [Asset]\n{0}")]
+  Asset(#[from] AssetError),
 }
 
 pub type ServerResult<T = ()> = Result<T, ServerError>;

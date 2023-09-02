@@ -2,48 +2,96 @@ use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::prelude::*;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::Ordering;
-use std::thread::{self, JoinHandle};
+use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 pub struct Server {
   listener: TcpListener,
-  pub router: Router,
+  router: Arc<Router>,
 }
 
 impl Server {
-  pub fn new(addr: &str) -> ServerResult<Self> {
+  pub fn new(addr: &str, router: Router) -> ServerResult<Self> {
     Ok(Self {
       listener: TcpListener::bind(addr)?,
-      router: Router::new(),
+      router: Arc::new(router),
     })
   }
 
   pub fn listen(&self) -> ServerResult {
-    let addr = self.listener.local_addr()?;
-    let ctrl_c_thread = create_ctrl_c_thread(addr)?;
+    if unsafe { SetConsoleCtrlHandler(Some(ctrl_handler), TRUE) } == FALSE {
+      return Err(ServerError::ExitHandler);
+    }
 
-    log!(success@"Server listening on {addr:?}");
-    for (mut stream, request) in RequestIter::new(&self.listener) {
-      match request {
-        Request::Http(request) => self.router.route(request).send(&mut stream)?,
-        Request::Exit => {
-          log!(info@"Ctrl+C pressed, exiting...");
-          break;
+    let addr = self.listener.local_addr()?;
+    let mut connections = Vec::new();
+    self.listener.set_nonblocking(true)?;
+
+    log!(ok@"Server listening on {addr:?}");
+    while !CTRL_C_PRESSED.load(Ordering::SeqCst) {
+      match self.listener.accept() {
+        Ok((stream, addr)) => {
+          let router = self.router.clone();
+          connections.push(
+            thread::Builder::new()
+              .name(addr.to_string())
+              .spawn(move || serve_client(stream, router))?,
+          );
+          connections.retain(|connection| !connection.is_finished());
+          log!(info@"Connections: {}", connections.len());
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+          std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Err(e) => {
+          log!(err@"Error accepting connection\n{e}");
         }
       }
     }
 
-    ctrl_c_thread
-      .join()
-      .expect("Could not join ctrl_c_thread")?;
+    log!(info@"Ctrl C pressed, exiting...");
+    for connection in connections {
+      connection.join().expect("Could not join connection")?;
+    }
 
     Ok(())
   }
 }
 
-type Route = Box<dyn Fn(&HttpRequest) -> ServerResult<HttpResponse>>;
+fn serve_client(mut stream: TcpStream, router: Arc<Router>) -> ServerResult {
+  stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+  stream.set_nonblocking(true)?;
+  let thread = thread::current();
+  let name = thread.name().unwrap_or("Unnamed Connection");
+
+  log!(ok@"[{name}] New connection");
+
+  let mut received_data = [0; 1024];
+  while !CTRL_C_PRESSED.load(Ordering::SeqCst) {
+    match stream.read(&mut received_data) {
+      Ok(size) if size > 0 => {
+        let mut response = router.route(HttpRequest::parse(&received_data));
+        response.send(&mut stream)?;
+      }
+      Ok(_) => break,
+      Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+      }
+      Err(e) => {
+        log!(err@"[{name}] Error reading stream [{:?}]\n{e}", e.kind());
+        break;
+      }
+    }
+  }
+
+  log!(info@"[{name}] Connection closed");
+  Ok(())
+}
+
+type Route = Box<dyn Fn(&HttpRequest) -> ServerResult<HttpResponse> + Send + Sync>;
 pub struct Router {
   endpoints_get: Vec<(String, Route)>,
 }
@@ -58,7 +106,7 @@ impl Router {
   pub fn get(
     &mut self,
     endpoint: &str,
-    route: impl Fn(&HttpRequest) -> ServerResult<HttpResponse> + 'static,
+    route: impl Fn(&HttpRequest) -> ServerResult<HttpResponse> + 'static + Send + Sync,
   ) -> &mut Self {
     self
       .endpoints_get
@@ -79,7 +127,13 @@ impl Router {
     };
 
     endpoints
-      .find(|ep| request.path.starts_with(&ep.0))
+      .find(|ep| {
+        if let Some(path) = ep.0.strip_suffix("/*") {
+          request.path.starts_with(path)
+        } else {
+          request.path == ep.0
+        }
+      })
       .map(|ep| ep.1(&request))
       .unwrap_or(Ok(HttpStatus::NotFound.into()))
       .unwrap_or_else(|e| {
@@ -90,28 +144,4 @@ impl Router {
         .into()
       })
   }
-}
-
-fn create_ctrl_c_thread(addr: SocketAddr) -> ServerResult<JoinHandle<ServerResult>> {
-  let ctrl_c_handler = unsafe { SetConsoleCtrlHandler(Some(ctrl_handler), TRUE) };
-  if ctrl_c_handler == FALSE {
-    return Err(ServerError::ExitHandler);
-  }
-
-  Ok(
-    thread::Builder::new()
-      .name("Ctrl + C".into())
-      .spawn(move || -> ServerResult {
-        loop {
-          if CTRL_C_PRESSED.load(Ordering::SeqCst) {
-            let mut stream = TcpStream::connect(format!("127.0.0.1:{}", addr.port()))?;
-            stream.write_all("exit".as_bytes())?;
-            stream.shutdown(std::net::Shutdown::Write)?;
-            break;
-          }
-          thread::sleep(Duration::from_millis(100));
-        }
-        Ok(())
-      })?,
-  )
 }

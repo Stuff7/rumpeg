@@ -51,7 +51,7 @@ pub trait LogDisplay: Color {
       self.rgb(255, 105, 105).reset()
     )
   }
-  fn success(&self) -> String
+  fn ok(&self) -> String
   where
     Self: Display,
   {

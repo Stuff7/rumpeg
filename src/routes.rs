@@ -1,5 +1,5 @@
 use crate::http::{
-  find_query_arg, find_query_flag, FromPath, FromQueryString, HttpRequest, HttpRequestError,
+  find_query_arg, find_query_flag, Asset, FromPath, FromQueryString, HttpRequest, HttpRequestError,
   HttpRequestResult, HttpResponse, HttpStatus, ServerResult,
 };
 use crate::rumpeg::SeekPosition;
@@ -8,9 +8,17 @@ use crate::MEDIA_FOLDER;
 use std::ops::Deref;
 use std::sync::atomic::Ordering;
 
+pub fn index(request: &HttpRequest) -> ServerResult<HttpResponse> {
+  let mut response = HttpResponse::default();
+  let mut asset = Asset::open("public/index.html")?;
+  response.add_asset(&mut asset, request.range())?;
+
+  Ok(response)
+}
+
 pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
   let query: VideoArgs = request.query()?;
-  let videopath: VideoPath = request.path()?;
+  let videopath: FilePath = request.path()?;
 
   let Ok(video) = Video::open(
     &videopath,
@@ -45,6 +53,15 @@ pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
   Ok(response)
 }
 
+pub fn get_asset(request: &HttpRequest) -> ServerResult<HttpResponse> {
+  let filepath: FilePath = request.path()?;
+  println!("OPEN ASSET {}", *filepath);
+  let mut asset = Asset::open(&filepath)?;
+  let mut response = HttpResponse::default();
+  response.add_asset(&mut asset, request.range())?;
+  Ok(response)
+}
+
 #[derive(Debug)]
 pub struct VideoArgs {
   pub film: bool,
@@ -76,9 +93,9 @@ impl FromQueryString for VideoArgs {
 }
 
 #[derive(Debug)]
-pub struct VideoPath(String);
+pub struct FilePath(String);
 
-impl FromPath for VideoPath {
+impl FromPath for FilePath {
   fn from_path(path: &str) -> HttpRequestResult<Self> {
     unsafe {
       path[1..]
@@ -94,7 +111,7 @@ impl FromPath for VideoPath {
   }
 }
 
-impl Deref for VideoPath {
+impl Deref for FilePath {
   type Target = String;
   fn deref(&self) -> &Self::Target {
     &self.0

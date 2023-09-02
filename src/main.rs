@@ -9,7 +9,7 @@ mod video;
 mod webp;
 
 use crate::cli::CLIArgs;
-use crate::http::Server;
+use crate::http::{Router, Server};
 use ascii::LogDisplay;
 use rumpeg::*;
 use std::fs::write;
@@ -42,14 +42,19 @@ macro_rules! unwrap {
 pub static MEDIA_FOLDER: AtomicPtr<String> = AtomicPtr::new(std::ptr::null_mut());
 
 fn main() {
-  log!(success@"Using Ffmpeg v{} and libwebp v{}", rumpeg::version(), webp::version());
+  log!(ok@"Using Ffmpeg v{} and libwebp v{}", rumpeg::version(), webp::version());
   let mut args = unwrap!(Ok CLIArgs::read(), Err "Error");
   rumpeg::set_log_level(args.log_level);
 
   if args.host {
-    let mut server = unwrap!(Ok Server::new("0.0.0.0:8080"), Err "Could not create server");
-    server.router.get("/frame", routes::get_frame);
+    let mut router = Router::new();
+    router
+      .get("/", routes::index)
+      .get("/frame/*", routes::get_frame)
+      .get("/media/*", routes::get_asset);
+    let server = unwrap!(Ok Server::new("0.0.0.0:8080", router), Err "Could not create server");
     MEDIA_FOLDER.store(&mut args.filepath as *mut _, Ordering::SeqCst);
+
     unwrap!(Ok server.listen(), Err "Server could not listen");
     return;
   }
@@ -79,7 +84,7 @@ fn main() {
 
   let end_time = Instant::now();
 
-  log!(success@"Done in {:?}", end_time - start_time)
+  log!(ok@"Done in {:?}", end_time - start_time)
 }
 
 fn save_film_strip(

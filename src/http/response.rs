@@ -5,6 +5,7 @@ use std::{collections::HashMap, io::Write, net::TcpStream};
 pub enum HttpStatus {
   #[default]
   OK,
+  PartialContent,
   BadRequest(HttpRequestError),
   NotFound,
   InternalServerError(ServerError),
@@ -14,6 +15,7 @@ impl HttpStatus {
   fn as_tuple(&self) -> (u16, &'static str) {
     match *self {
       HttpStatus::OK => (200, "OK"),
+      HttpStatus::PartialContent => (206, "Partial Content"),
       HttpStatus::BadRequest(..) => (400, "Bad Request"),
       HttpStatus::NotFound => (404, "Not Found"),
       HttpStatus::InternalServerError(..) => (500, "Internal Server Error"),
@@ -35,6 +37,7 @@ impl Default for HttpResponse {
       headers: HashMap::from([
         ("Content-Type".to_string(), "text/plain".to_string()),
         ("Cache-Control".to_string(), "no-cache".to_string()),
+        ("Content-Length".to_string(), 0.to_string()),
       ]),
       content: Vec::new(),
     }
@@ -59,11 +62,32 @@ impl HttpResponse {
     self.content.extend_from_slice(content);
   }
 
+  pub fn add_asset(&mut self, asset: &mut Asset, range: Option<(usize, usize)>) -> ServerResult {
+    self.add_header("Content-Type", asset.content_type);
+
+    let content = if asset.size > MAX_ASSET_SIZE {
+      let (start, end) = range.unwrap_or((0, MAX_ASSET_SIZE));
+      let length = asset.size;
+
+      self.set_status(HttpStatus::PartialContent);
+      self.add_header("Connection", "keep-alive");
+      self.add_header("Keep-Alive", "timeout=5");
+      self.add_header("Accept-Ranges", "bytes");
+      self.add_header("Content-Range", &format!("bytes {start}-{end}/{length}"));
+
+      asset.read(start, end)?
+    } else {
+      asset.bytes()?
+    };
+    self.add_content(&content);
+    Ok(())
+  }
+
   pub fn set_status(&mut self, status: HttpStatus) {
     self.status_code = status;
   }
 
-  pub fn send(&self, stream: &mut TcpStream) -> ServerResult {
+  pub fn raw(&self) -> String {
     let (code, reason) = self.status_code.as_tuple();
 
     let mut response = format!("HTTP/1.1 {} {}\r\n", code, reason);
@@ -71,19 +95,21 @@ impl HttpResponse {
       response.push_str(&format!("{}: {}\r\n", key, value));
     }
     response.push_str("\r\n");
+    response
+  }
 
-    stream.write_all(response.as_bytes())?;
+  pub fn send(&mut self, stream: &mut TcpStream) -> ServerResult {
     if self.content.is_empty() {
       if let Some(e) = match self.status_code {
         HttpStatus::InternalServerError(ref e) => Some(e.to_string()),
         HttpStatus::BadRequest(ref e) => Some(e.to_string()),
         _ => None,
       } {
-        stream.write_all(e.as_bytes())?
+        self.add_content(e.as_bytes());
       }
-    } else {
-      stream.write_all(&self.content)?;
     }
+    stream.write_all(self.raw().as_bytes())?;
+    stream.write_all(&self.content)?;
     stream.flush()?;
     Ok(())
   }
