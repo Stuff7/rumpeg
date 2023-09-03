@@ -53,6 +53,14 @@ impl HttpResponse {
     }
   }
 
+  pub fn from_asset(asset_path: &str, request: &HttpRequest) -> ServerResult<Self> {
+    let mut response = Self::default();
+    let mut asset = Asset::open(asset_path)?;
+    response.add_asset(&mut asset, request.range())?;
+
+    Ok(response)
+  }
+
   pub fn add_header(&mut self, key: &str, value: &str) {
     self.headers.insert(key.to_string(), value.to_string());
   }

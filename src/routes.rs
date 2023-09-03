@@ -1,5 +1,5 @@
 use crate::http::{
-  find_query_arg, find_query_flag, Asset, FromPath, FromQueryString, HttpRequest, HttpRequestError,
+  find_query_arg, find_query_flag, FromPath, FromQueryString, HttpRequest, HttpRequestError,
   HttpRequestResult, HttpResponse, HttpStatus, ServerResult,
 };
 use crate::rumpeg::SeekPosition;
@@ -9,11 +9,11 @@ use std::ops::Deref;
 use std::sync::atomic::Ordering;
 
 pub fn index(request: &HttpRequest) -> ServerResult<HttpResponse> {
-  let mut response = HttpResponse::default();
-  let mut asset = Asset::open("public/index.html")?;
-  response.add_asset(&mut asset, request.range())?;
+  HttpResponse::from_asset("public/index.html", request)
+}
 
-  Ok(response)
+pub fn favicon(request: &HttpRequest) -> ServerResult<HttpResponse> {
+  HttpResponse::from_asset("public/favicon.ico", request)
 }
 
 pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
@@ -55,10 +55,7 @@ pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
 
 pub fn get_asset(request: &HttpRequest) -> ServerResult<HttpResponse> {
   let filepath: FilePath = request.path()?;
-  let mut asset = Asset::open(&filepath)?;
-  let mut response = HttpResponse::default();
-  response.add_asset(&mut asset, request.range())?;
-  Ok(response)
+  HttpResponse::from_asset(&filepath, request)
 }
 
 #[derive(Debug)]

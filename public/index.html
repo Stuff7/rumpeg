@@ -1,0 +1,32 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    *, ::before, ::after {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+    }
+    main {
+      width: 100vw;
+      height: 93vh;
+      display: flex;
+      justify-content: center;
+    }
+  </style>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const video = document.querySelector("video");
+      video.src = `/media${location.pathname}`;
+    });
+  </script>
+</head>
+<body>
+  <main>
+    <video controls></video>
+  </main>
+</body>
+</html>

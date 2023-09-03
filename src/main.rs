@@ -49,9 +49,10 @@ fn main() {
   if args.host {
     let mut router = Router::new();
     router
-      .get("/", routes::index)
       .get("/frame/*", routes::get_frame)
-      .get("/media/*", routes::get_asset);
+      .get("/media/*", routes::get_asset)
+      .get("/favicon.ico", routes::favicon)
+      .get("/*", routes::index);
     let server = unwrap!(Ok Server::new("0.0.0.0:8080", router), Err "Could not create server");
     MEDIA_FOLDER.store(&mut args.filepath as *mut _, Ordering::SeqCst);
 
