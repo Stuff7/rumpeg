@@ -87,7 +87,7 @@ pub enum HttpRequestError {
 
 pub type HttpRequestResult<T = HttpRequest> = Result<T, HttpRequestError>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum HttpMethod {
   Get,
 }

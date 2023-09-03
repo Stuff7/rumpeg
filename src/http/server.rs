@@ -3,6 +3,7 @@ use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
+use std::ops::Index;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
@@ -93,14 +94,12 @@ fn serve_client(mut stream: TcpStream, router: Arc<Router>) -> ServerResult {
 
 type Route = Box<dyn Fn(&HttpRequest) -> ServerResult<HttpResponse> + Send + Sync>;
 pub struct Router {
-  endpoints_get: Vec<(String, Route)>,
+  get: Vec<(String, Route)>,
 }
 
 impl Router {
   pub fn new() -> Self {
-    Self {
-      endpoints_get: Vec::new(),
-    }
+    Self { get: Vec::new() }
   }
 
   pub fn get(
@@ -108,9 +107,7 @@ impl Router {
     endpoint: &str,
     route: impl Fn(&HttpRequest) -> ServerResult<HttpResponse> + 'static + Send + Sync,
   ) -> &mut Self {
-    self
-      .endpoints_get
-      .push((endpoint.to_string(), Box::new(route)));
+    self.get.push((endpoint.to_string(), Box::new(route)));
     self
   }
 
@@ -122,11 +119,8 @@ impl Router {
       }
     };
 
-    let mut endpoints = match request.method {
-      HttpMethod::Get => self.endpoints_get.iter(),
-    };
-
-    endpoints
+    self[request.method]
+      .iter()
       .find(|ep| {
         if let Some(path) = ep.0.strip_suffix("/*") {
           request.path.starts_with(path)
@@ -143,5 +137,14 @@ impl Router {
         }
         .into()
       })
+  }
+}
+
+impl Index<HttpMethod> for Router {
+  type Output = Vec<(String, Route)>;
+  fn index(&self, index: HttpMethod) -> &Self::Output {
+    match index {
+      HttpMethod::Get => &self.get,
+    }
   }
 }
