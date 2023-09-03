@@ -41,8 +41,7 @@ pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
     video.frame_to_webp(&mut frame)?
   };
 
-  let mut response = HttpResponse::new();
-  response.set_status(HttpStatus::OK);
+  let mut response = HttpResponse::default();
   response.add_header("Content-Type", "image/webp");
   response.add_header("X-Video-Width", &video.width.to_string());
   response.add_header("X-Video-Height", &video.height.to_string());

@@ -45,14 +45,6 @@ impl Default for HttpResponse {
 }
 
 impl HttpResponse {
-  pub fn new() -> Self {
-    HttpResponse {
-      status_code: HttpStatus::OK,
-      headers: HashMap::new(),
-      content: Vec::new(),
-    }
-  }
-
   pub fn from_asset(asset_path: &str, request: &HttpRequest) -> ServerResult<Self> {
     let mut response = Self::default();
     let mut asset = Asset::open(asset_path)?;
