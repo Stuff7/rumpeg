@@ -65,9 +65,16 @@ impl HttpResponse {
   pub fn add_asset(&mut self, asset: &mut Asset, range: Option<(usize, usize)>) -> ServerResult {
     self.add_header("Content-Type", asset.content_type);
 
-    let content = if asset.size > MAX_ASSET_SIZE {
-      let (start, end) = range.unwrap_or((0, MAX_ASSET_SIZE));
+    let content = if range.is_some() || asset.size > PARTIAL_CONTENT_SIZE {
       let length = asset.size;
+      let (start, end) = range.unwrap_or((0, ASSET_CHUNK_SIZE));
+      let end = std::cmp::min(
+        match end - start {
+          s if s > ASSET_CHUNK_SIZE || s == 0 => start + ASSET_CHUNK_SIZE,
+          _ => end,
+        },
+        length,
+      );
 
       self.set_status(HttpStatus::PartialContent);
       self.add_header("Connection", "keep-alive");

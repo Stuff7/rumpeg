@@ -55,7 +55,6 @@ pub fn get_frame(request: &HttpRequest) -> ServerResult<HttpResponse> {
 
 pub fn get_asset(request: &HttpRequest) -> ServerResult<HttpResponse> {
   let filepath: FilePath = request.path()?;
-  println!("OPEN ASSET {}", *filepath);
   let mut asset = Asset::open(&filepath)?;
   let mut response = HttpResponse::default();
   response.add_asset(&mut asset, request.range())?;

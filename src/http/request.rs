@@ -56,8 +56,8 @@ impl HttpRequest {
           let end = r
             .1
             .get(i + 1..r.1.len())
-            .map(|s| s.parse::<usize>().unwrap_or(start + MAX_ASSET_SIZE))
-            .unwrap_or(start + MAX_ASSET_SIZE);
+            .map(|s| s.parse::<usize>().unwrap_or(start + ASSET_CHUNK_SIZE))
+            .unwrap_or(start + ASSET_CHUNK_SIZE);
           (start, end)
         })
       })
