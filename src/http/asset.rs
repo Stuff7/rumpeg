@@ -16,15 +16,15 @@ pub enum AssetError {
   IO(#[from] std::io::Error),
 }
 
-pub type AssetResult<T = Asset> = Result<T, AssetError>;
+pub type AssetResult<'a, T = Asset<'a>> = Result<T, AssetError>;
 
-pub struct Asset {
+pub struct Asset<'a> {
   file: File,
-  pub content_type: &'static str,
+  pub content_type: &'a str,
   pub size: usize,
 }
 
-impl Asset {
+impl<'a> Asset<'a> {
   pub fn open(file_path: &str) -> AssetResult {
     let file = File::open(file_path)?;
     Ok(Asset {
@@ -48,7 +48,7 @@ impl Asset {
   }
 }
 
-impl Deref for Asset {
+impl<'a> Deref for Asset<'a> {
   type Target = File;
   fn deref(&self) -> &Self::Target {
     &self.file
@@ -57,7 +57,7 @@ impl Deref for Asset {
 
 static CONTENT_TYPES: OnceLock<HashMap<&str, &str>> = OnceLock::new();
 
-fn get_content_type(filepath: &str) -> &'static str {
+fn get_content_type<'a>(filepath: &str) -> &'a str {
   let content_types = CONTENT_TYPES.get_or_init(|| {
     HashMap::from([
       (".html", "text/html"),

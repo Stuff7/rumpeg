@@ -89,7 +89,7 @@ pub enum WebPError {
   #[error("Webp config initialization failed")]
   WebPConfigInit,
   #[error("Format \"{0}\" is not supported")]
-  FormatNotSupported(&'static str),
+  FormatNotSupported(String),
 }
 
 impl WebPError {
@@ -98,7 +98,7 @@ impl WebPError {
   }
 
   pub fn from_format(format: ffmpeg::AVPixelFormat) -> Self {
-    Self::FormatNotSupported(format.av_pix_fmt_name())
+    Self::FormatNotSupported(format.av_pix_fmt_name().to_string())
   }
 }
 

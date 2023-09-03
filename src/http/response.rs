@@ -12,7 +12,7 @@ pub enum HttpStatus {
 }
 
 impl HttpStatus {
-  fn as_tuple(&self) -> (u16, &'static str) {
+  fn as_tuple<'a>(&self) -> (u16, &'a str) {
     match *self {
       HttpStatus::OK => (200, "OK"),
       HttpStatus::PartialContent => (206, "Partial Content"),

@@ -18,10 +18,7 @@ impl AVFormatContext {
     let filename = CString::new(filepath)?;
 
     unsafe {
-      let mut ptr = ffmpeg::avformat_alloc_context();
-      if ptr.is_null() {
-        return Err(RumpegError::AVFormatContextAllocFail);
-      }
+      let mut ptr = std::ptr::null_mut();
 
       let result = ffmpeg::avformat_open_input(
         &mut ptr,
@@ -118,14 +115,14 @@ impl Drop for AVFormatContext {
 }
 
 #[derive(Debug)]
-pub struct AVInputFormat {
+pub struct AVInputFormat<'a> {
   ptr: *const ffmpeg::AVInputFormat,
-  pub extensions: &'static str,
-  pub format_name: &'static str,
-  pub mime_type: &'static str,
+  pub extensions: &'a str,
+  pub format_name: &'a str,
+  pub mime_type: &'a str,
 }
 
-impl AVInputFormat {
+impl<'a> AVInputFormat<'a> {
   pub fn new(ptr: *const ffmpeg::AVInputFormat) -> Self {
     unsafe {
       Self {
@@ -138,7 +135,7 @@ impl AVInputFormat {
   }
 }
 
-impl Deref for AVInputFormat {
+impl<'a> Deref for AVInputFormat<'a> {
   type Target = ffmpeg::AVInputFormat;
 
   fn deref(&self) -> &Self::Target {

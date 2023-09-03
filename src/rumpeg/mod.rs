@@ -27,8 +27,6 @@ pub enum RumpegError {
   AVCodecContextAllocFail,
   #[error("{0}: AVError - {2} (Code {1})")]
   AVError(String, i32, String),
-  #[error("Could not allocate AVFormatContext")]
-  AVFormatContextAllocFail,
   #[error("Could not allocate AVFrame")]
   AVFrameCreation,
   #[error("Could not create CString\n{0}")]
@@ -65,7 +63,7 @@ impl RumpegError {
 
 pub type RumpegResult<T = ()> = Result<T, RumpegError>;
 
-pub fn version() -> &'static str {
+pub fn version<'a>() -> &'a str {
   unsafe { ptr_to_str(ffmpeg::av_version_info()).unwrap_or("N/A") }
 }
 
@@ -117,7 +115,7 @@ pub fn set_log_level(level: LogLevel) {
   }
 }
 
-pub fn ptr_to_str(ptr: *const i8) -> Option<&'static str> {
+pub fn ptr_to_str<'a>(ptr: *const i8) -> Option<&'a str> {
   unsafe {
     (!ptr.is_null())
       .then(|| CStr::from_ptr(ptr).to_str().ok())

@@ -9,12 +9,12 @@ use thiserror::Error;
 const MAX_FILM_WIDTH: i32 = 8;
 
 #[derive(Debug)]
-pub struct Video {
+pub struct Video<'a> {
   pub duration_ms: i64,
-  pub extensions: &'static str,
-  pub format_name: &'static str,
+  pub extensions: &'a str,
+  pub format_name: &'a str,
   pub height: i32,
-  pub mime_type: &'static str,
+  pub mime_type: &'a str,
   pub width: i32,
   codec_context: AVCodecContext,
   display_matrix: Option<math::Matrix3x3>,
@@ -32,8 +32,8 @@ pub enum VideoError {
 
 type VideoResult<T = ()> = Result<T, VideoError>;
 
-impl Video {
-  pub fn open(filepath: &str, w: i32, h: i32) -> VideoResult<Video> {
+impl<'a> Video<'a> {
+  pub fn open(filepath: &'a str, w: i32, h: i32) -> VideoResult<Video> {
     let format_context = AVFormatContext::new(filepath)?;
     let codec_context = AVCodecContext::new(format_context.stream.codecpar)?;
     let iformat = AVInputFormat::new(format_context.iformat);
@@ -182,7 +182,7 @@ impl Video {
   }
 }
 
-impl fmt::Display for Video {
+impl<'a> fmt::Display for Video<'a> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
       f,
