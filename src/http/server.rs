@@ -2,7 +2,7 @@ use super::*;
 use crate::ascii::LogDisplay;
 use crate::log;
 use std::io::prelude::*;
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::ops::Index;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -64,7 +64,6 @@ impl Server {
 
 fn serve_client(mut stream: TcpStream, router: Arc<Router>) -> ServerResult {
   stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-  stream.set_nonblocking(true)?;
   let thread = thread::current();
   let name = thread.name().unwrap_or("Unnamed Connection");
 
@@ -78,14 +77,12 @@ fn serve_client(mut stream: TcpStream, router: Arc<Router>) -> ServerResult {
         response.send(&mut stream)?;
       }
       Ok(_) => break,
-      Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-      }
-      Err(e) => {
-        log!(err@"[{name}] Error reading stream [{:?}]\n{e}", e.kind());
-        break;
-      }
+      Err(_) => break,
     }
+  }
+
+  if let Err(e) = stream.shutdown(Shutdown::Both) {
+    log!(err@"[{name}] Error closing stream: {e}");
   }
 
   log!(info@"[{name}] Connection closed");
